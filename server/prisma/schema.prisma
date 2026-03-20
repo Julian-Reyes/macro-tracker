@@ -1,0 +1,80 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  meals      Meal[]
+  dailyGoals DailyGoals?
+
+  @@map("users")
+}
+
+model DailyGoals {
+  id        String @id @default(cuid())
+  userId    String @unique @map("user_id")
+  calories  Int    @default(2200)
+  proteinG  Float  @default(150) @map("protein_g")
+  carbsG    Float  @default(275) @map("carbs_g")
+  fatG      Float  @default(75) @map("fat_g")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("daily_goals")
+}
+
+model Meal {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  imageUrl  String?  @map("image_url")
+  mealNotes String?  @map("meal_notes")
+  provider  String   @default("anthropic") // which AI analyzed it
+  scannedAt DateTime @default(now()) @map("scanned_at")
+
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items MealItem[]
+
+  @@index([userId, scannedAt])
+  @@map("meals")
+}
+
+model MealItem {
+  id       String @id @default(cuid())
+  mealId   String @map("meal_id")
+  name     String
+  portion  String
+  calories Int
+  proteinG Float  @map("protein_g")
+  carbsG   Float  @map("carbs_g")
+  fatG     Float  @map("fat_g")
+  fiberG   Float  @default(0) @map("fiber_g")
+  sugarG   Float  @default(0) @map("sugar_g")
+
+  // optional link to verified nutrition data
+  usdaFdcId Int? @map("usda_fdc_id")
+
+  meal Meal @relation(fields: [mealId], references: [id], onDelete: Cascade)
+
+  @@map("meal_items")
+}
+
+model NutritionCache {
+  id        String   @id @default(cuid())
+  foodName  String   @map("food_name")
+  source    String   @default("usda") // usda | openfoodfacts
+  data      Json
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([foodName, source])
+  @@map("nutrition_cache")
+}
