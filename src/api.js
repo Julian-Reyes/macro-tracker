@@ -41,19 +41,19 @@ async function apiFetch(path, options = {}) {
 }
 
 // --- Auth ---
-export async function register(email, password, name) {
+export async function register(username, password, name) {
   const data = await apiFetch('/auth/register', {
     method: 'POST',
-    body: JSON.stringify({ email, password, name }),
+    body: JSON.stringify({ username, password, name }),
   });
   setToken(data.token);
   return data.user;
 }
 
-export async function login(email, password) {
+export async function login(username, password) {
   const data = await apiFetch('/auth/login', {
     method: 'POST',
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ username, password }),
   });
   setToken(data.token);
   return data.user;
@@ -63,7 +63,7 @@ export async function getMe() {
   return apiFetch('/auth/me');
 }
 
-// --- Meals ---
+// --- Meals (authenticated) ---
 export async function scanMeal(base64, mediaType) {
   return apiFetch('/meals/scan', {
     method: 'POST',
@@ -78,6 +78,61 @@ export async function getMeals(date) {
 
 export async function deleteMeal(id) {
   return apiFetch(`/meals/${id}`, { method: 'DELETE' });
+}
+
+export async function importMeals(meals) {
+  return apiFetch('/meals/import', {
+    method: 'POST',
+    body: JSON.stringify({ meals }),
+  });
+}
+
+// --- Meals (guest, no auth) ---
+export async function analyzeMeal(base64, mediaType) {
+  const res = await fetch(`${API_BASE}/meals/analyze`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image: base64, mediaType }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw { status: res.status, message: data.error || 'Analysis failed' };
+  return data;
+}
+
+// --- Guest localStorage ---
+const GUEST_MEALS_KEY = 'macro_guest_meals';
+
+export function getGuestMeals() {
+  const raw = localStorage.getItem(GUEST_MEALS_KEY);
+  return raw ? JSON.parse(raw) : [];
+}
+
+export function getGuestMealsByDate(dateStr) {
+  const meals = getGuestMeals();
+  return meals.filter(m => {
+    if (!m.scannedAt) return false;
+    const d = new Date(m.scannedAt);
+    const y = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, '0');
+    const da = String(d.getDate()).padStart(2, '0');
+    return `${y}-${mo}-${da}` === dateStr;
+  });
+}
+
+export function addGuestMeal(meal) {
+  const meals = getGuestMeals();
+  meals.push({ ...meal, scannedAt: new Date().toISOString() });
+  localStorage.setItem(GUEST_MEALS_KEY, JSON.stringify(meals));
+}
+
+export function deleteGuestMeal(index) {
+  const meals = getGuestMeals();
+  meals.splice(index, 1);
+  localStorage.setItem(GUEST_MEALS_KEY, JSON.stringify(meals));
+}
+
+export function clearGuestMeals() {
+  localStorage.removeItem(GUEST_MEALS_KEY);
 }
 
 // --- Goals ---

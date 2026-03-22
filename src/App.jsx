@@ -1,6 +1,9 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import AuthScreen from "./AuthScreen";
-import { getToken, clearToken, getMe, scanMeal, getMeals, deleteMeal, getGoals, downscaleImage } from "./api";
+import {
+  getToken, clearToken, getMe, scanMeal, getMeals, deleteMeal, getGoals,
+  downscaleImage, analyzeMeal, getGuestMeals, getGuestMealsByDate, addGuestMeal, deleteGuestMeal,
+} from "./api";
 
 // Normalize Prisma camelCase → snake_case for display components
 function normalizeItem(item) {
@@ -25,6 +28,30 @@ function mealTotals(items) {
     acc.fat_g += n.fat_g;
     return acc;
   }, { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 });
+}
+
+function computeDailyTotals(meals) {
+  return meals.reduce((acc, m) => {
+    const t = mealTotals(m.items);
+    acc.calories += t.calories;
+    acc.protein_g += t.protein_g;
+    acc.carbs_g += t.carbs_g;
+    acc.fat_g += t.fat_g;
+    return acc;
+  }, { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0, sugar_g: 0 });
+}
+
+function toLocalDateStr(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function formatDisplayDate(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
 function MacroRing({ value, max, color, label, unit }) {
@@ -110,6 +137,7 @@ function ItemRow({ item, index }) {
 export default function App() {
   const [user, setUser] = useState(null);
   const [authChecking, setAuthChecking] = useState(true);
+  const [showAuth, setShowAuth] = useState(false);
   const [image, setImage] = useState(null);
   const [imageData, setImageData] = useState(null);
   const [analysis, setAnalysis] = useState(null);
@@ -119,10 +147,24 @@ export default function App() {
   const [dailyTotals, setDailyTotals] = useState({ calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0, sugar_g: 0 });
   const [goals, setGoals] = useState({ calories: 2200, proteinG: 150, carbsG: 275, fatG: 75 });
   const [view, setView] = useState("capture");
+  const [mealDetailMode, setMealDetailMode] = useState(false);
+  const [scaledImageUrl, setScaledImageUrl] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(() => toLocalDateStr());
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
 
-  // Check for existing auth on mount
+  const isGuest = !user;
+  const todayStr = toLocalDateStr();
+  const isToday = selectedDate === todayStr;
+
+  const changeDate = (delta) => {
+    const [y, m, d] = selectedDate.split('-').map(Number);
+    const date = new Date(y, m - 1, d + delta);
+    const newStr = toLocalDateStr(date);
+    if (newStr <= todayStr) setSelectedDate(newStr);
+  };
+
+  // Check for existing auth on mount (non-blocking — app shows immediately)
   useEffect(() => {
     const token = getToken();
     if (!token) { setAuthChecking(false); return; }
@@ -132,24 +174,44 @@ export default function App() {
       .finally(() => setAuthChecking(false));
   }, []);
 
-  // Fetch daily meals + goals when authenticated
+  // Load guest data from localStorage (filtered by selected date)
+  const loadGuestData = useCallback(() => {
+    const meals = getGuestMealsByDate(selectedDate);
+    setDailyLog(meals);
+    setDailyTotals(computeDailyTotals(meals));
+  }, [selectedDate]);
+
+  // Fetch from DB for authenticated users
   const fetchDailyData = useCallback(async () => {
     try {
-      const today = new Date().toISOString().split("T")[0];
-      const data = await getMeals(today);
+      const data = await getMeals(selectedDate);
       setDailyLog(data.meals || []);
       setDailyTotals(data.totals || { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0, sugar_g: 0 });
     } catch (err) {
       if (err.status === 401) setUser(null);
     }
-  }, []);
+  }, [selectedDate]);
 
-  useEffect(() => {
+  // Load data based on auth state
+  const refreshData = useCallback(() => {
     if (user) {
       fetchDailyData();
+    } else if (!authChecking) {
+      loadGuestData();
+    }
+  }, [user, authChecking, fetchDailyData, loadGuestData]);
+
+  useEffect(() => {
+    refreshData();
+    if (user) {
       getGoals().then(g => setGoals(g)).catch(() => {});
     }
-  }, [user, fetchDailyData]);
+  }, [user, refreshData]);
+
+  const handleAuth = (authedUser) => {
+    setUser(authedUser);
+    setShowAuth(false);
+  };
 
   const handleFile = useCallback((file) => {
     if (!file) return;
@@ -173,15 +235,29 @@ export default function App() {
 
     try {
       const scaled = await downscaleImage(imageData.base64, imageData.mediaType);
-      const result = await scanMeal(scaled.base64, scaled.mediaType);
+      setScaledImageUrl(`data:${scaled.mediaType};base64,${scaled.base64}`);
 
-      setAnalysis({
-        items: result.meal.items.map(normalizeItem),
-        totals: result.totals,
-        meal_notes: result.meal_notes || result.meal.mealNotes,
-      });
-      setView("result");
-      fetchDailyData();
+      if (user) {
+        // Authenticated: save to DB
+        const result = await scanMeal(scaled.base64, scaled.mediaType);
+        setAnalysis({
+          items: result.meal.items.map(normalizeItem),
+          totals: result.totals,
+          meal_notes: result.meal_notes || result.meal.mealNotes,
+        });
+        setView("result");
+        fetchDailyData();
+      } else {
+        // Guest: analyze only, store in localStorage
+        const result = await analyzeMeal(scaled.base64, scaled.mediaType);
+        const analysisData = {
+          items: result.analysis.items,
+          totals: result.analysis.totals,
+          meal_notes: result.analysis.meal_notes,
+        };
+        setAnalysis(analysisData);
+        setView("result");
+      }
     } catch (err) {
       if (err.status === 401) { setUser(null); return; }
       setError(err.message || "Analysis failed. Please try again.");
@@ -191,8 +267,22 @@ export default function App() {
   };
 
   const addToDaily = () => {
+    if (isGuest && analysis) {
+      addGuestMeal({ items: analysis.items, meal_notes: analysis.meal_notes, provider: "gemini", imageUrl: scaledImageUrl });
+    }
+    setImage(null);
+    setImageData(null);
+    setAnalysis(null);
+    setError(null);
+    setMealDetailMode(false);
     setView("daily");
-    fetchDailyData();
+    // New meals are always "today" — navigate there and refresh
+    if (selectedDate !== todayStr) {
+      setSelectedDate(todayStr); // triggers refresh via useEffect
+    } else {
+      if (user) fetchDailyData();
+      else loadGuestData();
+    }
   };
 
   const resetCapture = () => {
@@ -200,16 +290,23 @@ export default function App() {
     setImageData(null);
     setAnalysis(null);
     setError(null);
+    setScaledImageUrl(null);
+    setMealDetailMode(false);
     setView("capture");
   };
 
-  const handleDeleteMeal = async (e, mealId) => {
+  const handleDeleteMeal = async (e, mealIdOrIndex) => {
     e.stopPropagation();
-    try {
-      await deleteMeal(mealId);
-      fetchDailyData();
-    } catch (err) {
-      if (err.status === 401) setUser(null);
+    if (user) {
+      try {
+        await deleteMeal(mealIdOrIndex);
+        fetchDailyData();
+      } catch (err) {
+        if (err.status === 401) setUser(null);
+      }
+    } else {
+      deleteGuestMeal(mealIdOrIndex);
+      loadGuestData();
     }
   };
 
@@ -218,6 +315,7 @@ export default function App() {
     setUser(null);
     setDailyLog([]);
     setDailyTotals({ calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0, sugar_g: 0 });
+    setGoals({ calories: 2200, proteinG: 150, carbsG: 275, fatG: 75 });
     setView("capture");
   };
 
@@ -243,11 +341,6 @@ export default function App() {
         `}</style>
       </div>
     );
-  }
-
-  // Not logged in
-  if (!user) {
-    return <AuthScreen onAuth={setUser} />;
   }
 
   return (
@@ -276,6 +369,25 @@ export default function App() {
         }
       `}</style>
 
+      {/* Auth Overlay */}
+      {showAuth && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          zIndex: 100, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <div style={{ position: "relative", width: "100%", maxWidth: "480px" }}>
+            <button onClick={() => setShowAuth(false)} style={{
+              position: "absolute", top: "12px", right: "36px", zIndex: 101,
+              width: "32px", height: "32px", borderRadius: "50%",
+              background: "rgba(255,255,255,0.1)", border: "none",
+              color: "#fff", cursor: "pointer", fontSize: "16px",
+            }}>✕</button>
+            <AuthScreen onAuth={handleAuth} />
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{
         padding: "20px 20px 16px",
@@ -283,18 +395,26 @@ export default function App() {
         display: "flex", justifyContent: "space-between", alignItems: "center"
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <h1 style={{ fontFamily: "'Instrument Serif', serif", fontSize: "26px", fontWeight: 400, letterSpacing: "-0.5px" }}>
+          <h1 onClick={resetCapture} style={{ fontFamily: "'Instrument Serif', serif", fontSize: "26px", fontWeight: 400, letterSpacing: "-0.5px", cursor: "pointer" }}>
             Macro<span style={{ color: "#E8C872" }}>.</span>
           </h1>
         </div>
         <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-          <button onClick={handleLogout} style={{
-            padding: "6px 12px", borderRadius: "20px", border: "none", cursor: "pointer",
-            background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.3)",
-            fontSize: "11px", fontFamily: "'DM Sans',sans-serif",
-          }}>Log out</button>
+          {user ? (
+            <button onClick={handleLogout} style={{
+              padding: "6px 12px", borderRadius: "20px", border: "none", cursor: "pointer",
+              background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.3)",
+              fontSize: "11px", fontFamily: "'DM Sans',sans-serif",
+            }}>Log out</button>
+          ) : (
+            <button onClick={() => setShowAuth(true)} style={{
+              padding: "6px 12px", borderRadius: "20px", border: "none", cursor: "pointer",
+              background: "rgba(232,200,114,0.12)", color: "#E8C872",
+              fontSize: "11px", fontWeight: 600, fontFamily: "'DM Sans',sans-serif",
+            }}>Sign up</button>
+          )}
           {["capture", "daily"].map(v => (
-            <button key={v} onClick={() => { setView(v); if (v === "daily") fetchDailyData(); }} style={{
+            <button key={v} onClick={() => { setView(v); if (v === "daily") refreshData(); }} style={{
               padding: "6px 14px", borderRadius: "20px", border: "none", cursor: "pointer",
               fontSize: "12px", fontWeight: 500, fontFamily: "'DM Sans',sans-serif",
               textTransform: "uppercase", letterSpacing: "0.5px",
@@ -311,7 +431,7 @@ export default function App() {
       {/* Capture View */}
       {(view === "capture" || view === "result") && (
         <div style={{ animation: "fadeSlideIn 0.3s ease-out" }}>
-          {!image ? (
+          {view === "capture" && !image ? (
             <div style={{ padding: "40px 20px", display: "flex", flexDirection: "column", alignItems: "center", gap: "24px" }}>
               <div style={{
                 width: "100%", aspectRatio: "4/3", borderRadius: "16px",
@@ -349,24 +469,26 @@ export default function App() {
             </div>
           ) : (
             <div>
-              {/* Image preview */}
-              <div style={{ position: "relative" }}>
-                <img src={image} alt="Food" style={{
-                  width: "100%", maxHeight: "280px", objectFit: "cover", display: "block"
-                }} />
-                <div style={{
-                  position: "absolute", bottom: 0, left: 0, right: 0, height: "80px",
-                  background: "linear-gradient(transparent, #0C0C0E)"
-                }} />
-                {!analysis && !loading && (
-                  <button onClick={resetCapture} style={{
-                    position: "absolute", top: "12px", right: "12px",
-                    width: "32px", height: "32px", borderRadius: "50%",
-                    background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)",
-                    border: "none", color: "#fff", cursor: "pointer", fontSize: "16px"
-                  }}>✕</button>
-                )}
-              </div>
+              {/* Image preview (only if image exists) */}
+              {image && (
+                <div style={{ position: "relative" }}>
+                  <img src={image} alt="Food" style={{
+                    width: "100%", maxHeight: "280px", objectFit: "cover", display: "block"
+                  }} />
+                  <div style={{
+                    position: "absolute", bottom: 0, left: 0, right: 0, height: "80px",
+                    background: "linear-gradient(transparent, #0C0C0E)"
+                  }} />
+                  {!analysis && !loading && (
+                    <button onClick={resetCapture} style={{
+                      position: "absolute", top: "12px", right: "12px",
+                      width: "32px", height: "32px", borderRadius: "50%",
+                      background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)",
+                      border: "none", color: "#fff", cursor: "pointer", fontSize: "16px"
+                    }}>✕</button>
+                  )}
+                </div>
+              )}
 
               {/* Action / Loading */}
               {!analysis && !loading && (
@@ -460,16 +582,33 @@ export default function App() {
 
                   {/* Actions */}
                   <div style={{ padding: "16px 20px 32px", display: "flex", gap: "12px" }}>
-                    <button onClick={resetCapture} style={{
-                      flex: 1, padding: "14px", borderRadius: "12px", cursor: "pointer",
-                      border: "1px solid rgba(255,255,255,0.1)", background: "transparent",
-                      color: "#fff", fontSize: "13px", fontFamily: "'DM Sans',sans-serif"
-                    }}>New Scan</button>
-                    <button onClick={addToDaily} style={{
-                      flex: 1, padding: "14px", borderRadius: "12px", border: "none", cursor: "pointer",
-                      background: "linear-gradient(135deg, #7BE0AD, #4CB97A)", color: "#0C0C0E",
-                      fontSize: "13px", fontWeight: 700, fontFamily: "'DM Sans',sans-serif"
-                    }}>+ Add to Log</button>
+                    {mealDetailMode ? (
+                      <>
+                        <button onClick={() => { setMealDetailMode(false); setAnalysis(null); setImage(null); setView("daily"); }} style={{
+                          flex: 1, padding: "14px", borderRadius: "12px", cursor: "pointer",
+                          border: "1px solid rgba(255,255,255,0.1)", background: "transparent",
+                          color: "#fff", fontSize: "13px", fontFamily: "'DM Sans',sans-serif"
+                        }}>← Back to Log</button>
+                        <button onClick={resetCapture} style={{
+                          flex: 1, padding: "14px", borderRadius: "12px", border: "none", cursor: "pointer",
+                          background: "linear-gradient(135deg, #E8C872, #D4A843)", color: "#0C0C0E",
+                          fontSize: "13px", fontWeight: 700, fontFamily: "'DM Sans',sans-serif"
+                        }}>New Scan</button>
+                      </>
+                    ) : (
+                      <>
+                        <button onClick={resetCapture} style={{
+                          flex: 1, padding: "14px", borderRadius: "12px", cursor: "pointer",
+                          border: "1px solid rgba(255,255,255,0.1)", background: "transparent",
+                          color: "#fff", fontSize: "13px", fontFamily: "'DM Sans',sans-serif"
+                        }}>New Scan</button>
+                        <button onClick={addToDaily} style={{
+                          flex: 1, padding: "14px", borderRadius: "12px", border: "none", cursor: "pointer",
+                          background: "linear-gradient(135deg, #7BE0AD, #4CB97A)", color: "#0C0C0E",
+                          fontSize: "13px", fontWeight: 700, fontFamily: "'DM Sans',sans-serif"
+                        }}>+ Add to Log</button>
+                      </>
+                    )}
                   </div>
                 </div>
               )}
@@ -481,13 +620,45 @@ export default function App() {
       {/* Daily Log View */}
       {view === "daily" && (
         <div style={{ animation: "fadeSlideIn 0.3s ease-out" }}>
+          {/* Date Navigation */}
           <div style={{
-            padding: "24px 20px", background: "rgba(255,255,255,0.015)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: "16px 20px 0", gap: "8px"
+          }}>
+            <button onClick={() => changeDate(-1)} style={{
+              width: "32px", height: "32px", borderRadius: "50%", border: "none",
+              background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.5)",
+              cursor: "pointer", fontSize: "18px", display: "flex", alignItems: "center", justifyContent: "center",
+              fontFamily: "'DM Sans',sans-serif",
+            }}>‹</button>
+            <span style={{
+              fontSize: "15px", fontWeight: 600, minWidth: "150px", textAlign: "center",
+              color: isToday ? "#E8C872" : "rgba(255,255,255,0.7)",
+            }}>
+              {isToday ? "Today" : formatDisplayDate(selectedDate)}
+            </span>
+            <button onClick={() => changeDate(1)} disabled={isToday} style={{
+              width: "32px", height: "32px", borderRadius: "50%", border: "none",
+              background: isToday ? "transparent" : "rgba(255,255,255,0.04)",
+              color: isToday ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.5)",
+              cursor: isToday ? "default" : "pointer", fontSize: "18px",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontFamily: "'DM Sans',sans-serif",
+            }}>›</button>
+            {!isToday && (
+              <button onClick={() => setSelectedDate(todayStr)} style={{
+                padding: "4px 12px", borderRadius: "12px", border: "none",
+                background: "rgba(232,200,114,0.1)", color: "#E8C872",
+                cursor: "pointer", fontSize: "11px", fontWeight: 600,
+                fontFamily: "'DM Sans',sans-serif",
+              }}>Today</button>
+            )}
+          </div>
+
+          <div style={{
+            padding: "16px 20px 24px", background: "rgba(255,255,255,0.015)",
             borderBottom: "1px solid rgba(255,255,255,0.04)"
           }}>
-            <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.25)", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "16px", fontWeight: 500 }}>
-              Today's Totals
-            </div>
             <div style={{ display: "flex", justifyContent: "space-around" }}>
               <MacroRing value={dailyTotals.calories} max={goals.calories} color="#E8C872" label="Calories" unit="kcal" />
               <MacroRing value={dailyTotals.protein_g} max={goals.proteinG} color="#7BE0AD" label="Protein" unit="g" />
@@ -496,9 +667,30 @@ export default function App() {
             </div>
           </div>
 
+          {/* Guest sign-up prompt */}
+          {isGuest && dailyLog.length > 0 && (
+            <div style={{
+              margin: "16px 20px", padding: "14px 16px", borderRadius: "10px",
+              background: "rgba(232,200,114,0.04)", border: "1px solid rgba(232,200,114,0.08)",
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+            }}>
+              <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.5)", margin: 0 }}>
+                Create an account to save your data across devices
+              </p>
+              <button onClick={() => setShowAuth(true)} style={{
+                padding: "6px 14px", borderRadius: "8px", border: "none", cursor: "pointer",
+                background: "rgba(232,200,114,0.15)", color: "#E8C872",
+                fontSize: "11px", fontWeight: 600, fontFamily: "'DM Sans',sans-serif",
+                whiteSpace: "nowrap", marginLeft: "12px",
+              }}>Sign up</button>
+            </div>
+          )}
+
           {dailyLog.length === 0 ? (
             <div style={{ padding: "60px 20px", textAlign: "center" }}>
-              <p style={{ color: "rgba(255,255,255,0.2)", fontSize: "14px" }}>No meals logged yet today</p>
+              <p style={{ color: "rgba(255,255,255,0.2)", fontSize: "14px" }}>
+                {isToday ? "No meals logged yet today" : `No meals on ${formatDisplayDate(selectedDate)}`}
+              </p>
               <button onClick={() => setView("capture")} style={{
                 marginTop: "16px", padding: "10px 24px", borderRadius: "10px", border: "none", cursor: "pointer",
                 background: "rgba(232,200,114,0.1)", color: "#E8C872",
@@ -514,7 +706,7 @@ export default function App() {
                 const totals = mealTotals(entry.items);
                 const time = new Date(entry.scannedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
                 return (
-                  <div key={entry.id} style={{
+                  <div key={entry.id || i} style={{
                     display: "flex", gap: "14px", padding: "14px 20px", alignItems: "center",
                     borderBottom: "1px solid rgba(255,255,255,0.04)",
                     animation: `fadeSlideIn 0.3s ${i * 0.05}s both ease-out`, cursor: "pointer"
@@ -522,9 +714,10 @@ export default function App() {
                     setAnalysis({
                       items: entry.items.map(normalizeItem),
                       totals,
-                      meal_notes: entry.mealNotes,
+                      meal_notes: entry.mealNotes || entry.meal_notes,
                     });
                     setImage(entry.imageUrl || null);
+                    setMealDetailMode(true);
                     setView("result");
                   }}>
                     {entry.imageUrl && (
@@ -542,7 +735,7 @@ export default function App() {
                       </div>
                     </div>
                     <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.2)", flexShrink: 0, marginRight: "8px" }}>{time}</span>
-                    <button onClick={(e) => handleDeleteMeal(e, entry.id)} style={{
+                    <button onClick={(e) => handleDeleteMeal(e, user ? entry.id : i)} style={{
                       width: "24px", height: "24px", borderRadius: "50%", border: "none", cursor: "pointer",
                       background: "rgba(232,114,114,0.1)", color: "#E87272", fontSize: "12px",
                       display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,

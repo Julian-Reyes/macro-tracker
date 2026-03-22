@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { login, register } from "./api";
+import { login, register, getGuestMeals, importMeals, clearGuestMeals } from "./api";
 
 export default function AuthScreen({ onAuth }) {
   const [mode, setMode] = useState("login");
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [error, setError] = useState(null);
@@ -16,8 +16,20 @@ export default function AuthScreen({ onAuth }) {
 
     try {
       const user = mode === "login"
-        ? await login(email, password)
-        : await register(email, password, name || undefined);
+        ? await login(username, password)
+        : await register(username, password, name || undefined);
+
+      // Migrate guest meals to DB
+      const guestMeals = getGuestMeals();
+      if (guestMeals.length > 0) {
+        try {
+          await importMeals(guestMeals);
+          clearGuestMeals();
+        } catch (importErr) {
+          console.error("Guest meal migration failed:", importErr);
+        }
+      }
+
       onAuth(user);
     } catch (err) {
       setError(err.message || "Something went wrong");
@@ -76,10 +88,10 @@ export default function AuthScreen({ onAuth }) {
             />
           )}
           <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            type="text"
+            placeholder="Username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
             required
             style={inputStyle}
           />

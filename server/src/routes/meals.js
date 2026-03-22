@@ -4,18 +4,96 @@ import multer from "multer";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import { randomUUID } from "crypto";
+import rateLimit from "express-rate-limit";
 import { authenticate } from "../middleware/auth.js";
 import { analyzeFood } from "../services/ai.js";
+
+const analyzeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // 10 requests per window
+  message: { error: "Too many analysis requests. Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 const prisma = new PrismaClient();
 export const mealsRouter = Router();
 
-mealsRouter.use(authenticate);
-
 const upload = multer({ limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB
 
+// POST /api/meals/analyze - AI analysis only, no auth, no DB save (guest mode)
+mealsRouter.post("/analyze", analyzeLimiter, upload.single("image"), async (req, res) => {
+  try {
+    let base64, mediaType;
+
+    if (req.file) {
+      base64 = req.file.buffer.toString("base64");
+      mediaType = req.file.mimetype;
+    } else if (req.body.image) {
+      base64 = req.body.image;
+      mediaType = req.body.mediaType || "image/jpeg";
+    } else {
+      return res.status(400).json({ error: "No image provided" });
+    }
+
+    const provider = req.body.provider || undefined;
+    const { data: analysis, provider: usedProvider } = await analyzeFood(base64, mediaType, provider);
+
+    res.json({ analysis, provider: usedProvider });
+  } catch (err) {
+    console.error("Analyze error:", err);
+    res.status(500).json({ error: "Analysis failed" });
+  }
+});
+
+// All routes below require authentication
+mealsRouter.use(authenticate);
+
+// POST /api/meals/import - bulk import guest meals on registration
+mealsRouter.post("/import", async (req, res) => {
+  try {
+    const { meals } = req.body;
+    if (!Array.isArray(meals) || meals.length === 0) {
+      return res.status(400).json({ error: "No meals to import" });
+    }
+    if (meals.length > 50) {
+      return res.status(400).json({ error: "Import limited to 50 meals at a time" });
+    }
+
+    let imported = 0;
+    for (const m of meals) {
+      await prisma.meal.create({
+        data: {
+          userId: req.userId,
+          mealNotes: m.meal_notes || null,
+          provider: m.provider || "gemini",
+          scannedAt: m.scannedAt ? new Date(m.scannedAt) : new Date(),
+          items: {
+            create: (m.items || []).map((item) => ({
+              name: item.name,
+              portion: item.portion,
+              calories: item.calories,
+              proteinG: item.protein_g ?? item.proteinG ?? 0,
+              carbsG: item.carbs_g ?? item.carbsG ?? 0,
+              fatG: item.fat_g ?? item.fatG ?? 0,
+              fiberG: item.fiber_g ?? item.fiberG ?? 0,
+              sugarG: item.sugar_g ?? item.sugarG ?? 0,
+            })),
+          },
+        },
+      });
+      imported++;
+    }
+
+    res.status(201).json({ imported });
+  } catch (err) {
+    console.error("Import error:", err);
+    res.status(500).json({ error: "Import failed" });
+  }
+});
+
 // POST /api/meals/scan - analyze a food photo and save
-mealsRouter.post("/scan", upload.single("image"), async (req, res) => {
+mealsRouter.post("/scan", analyzeLimiter, upload.single("image"), async (req, res) => {
   try {
     let base64, mediaType;
 
@@ -73,7 +151,7 @@ mealsRouter.post("/scan", upload.single("image"), async (req, res) => {
     });
   } catch (err) {
     console.error("Scan error:", err);
-    res.status(500).json({ error: err.message || "Scan failed" });
+    res.status(500).json({ error: "Scan failed" });
   }
 });
 

@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { authRouter } from "./routes/auth.js";
@@ -12,6 +13,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+app.use(helmet());
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 app.use("/uploads", express.static(process.env.UPLOAD_DIR || "./uploads"));
