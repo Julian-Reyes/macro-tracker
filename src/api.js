@@ -76,6 +76,21 @@ export async function getMeals(date) {
   return apiFetch(`/meals?date=${dateStr}`);
 }
 
+export async function saveMeal(items, mealNotes, imageBase64, mediaType, mealType, provider) {
+  return apiFetch('/meals', {
+    method: 'POST',
+    body: JSON.stringify({ items, meal_notes: mealNotes, image: imageBase64, mediaType, mealType, provider }),
+  });
+}
+
+// --- Nutrition search (no auth, guest-accessible) ---
+export async function searchNutrition(query, limit = 5) {
+  const res = await fetch(`${API_BASE}/nutrition/search?q=${encodeURIComponent(query)}&limit=${limit}`);
+  const data = await res.json();
+  if (!res.ok) throw { status: res.status, message: data.error || 'Search failed' };
+  return data.results;
+}
+
 export async function deleteMeal(id) {
   return apiFetch(`/meals/${id}`, { method: 'DELETE' });
 }

@@ -21,8 +21,8 @@ macro-tracker/
 │       │   └── auth.js   # JWT authenticate middleware + signToken
 │       ├── routes/
 │       │   ├── auth.js   # POST /register, /login, GET /me
-│       │   ├── meals.js  # POST /scan, GET /, GET /history/range, GET /:id, DELETE /:id
-│       │   ├── nutrition.js  # GET /lookup?food=...
+│       │   ├── meals.js  # POST /, POST /scan, POST /import, GET /, GET /history/range, GET /:id, DELETE /:id
+│       │   ├── nutrition.js  # GET /search (no auth), GET /lookup (auth)
 │       │   └── goals.js  # GET /, PUT /
 │       └── services/
 │           ├── ai.js     # Multi-provider AI dispatcher (Anthropic, Gemini, OpenAI, Ollama)
@@ -85,8 +85,9 @@ All authenticated routes require `Authorization: Bearer <token>` header. Guest e
 - `GET /api/auth/me` — returns current user
 
 ### Meals
-- `POST /api/meals/analyze` — **no auth** — AI analysis only, returns result without saving (guest mode)
-- `POST /api/meals/scan` — multipart image OR `{ image: base64, mediaType, provider? }` → analyzes + saves
+- `POST /api/meals/analyze` — **no auth** — AI analysis only, returns result without saving (used by both guest and authenticated for analyze → edit → save flow)
+- `POST /api/meals` — **auth required** — save a pre-analyzed meal with items + optional base64 image `{ items, meal_notes, image?, mediaType?, mealType?, provider? }`
+- `POST /api/meals/scan` — multipart image OR `{ image: base64, mediaType, provider? }` → analyzes + saves (legacy, not used by current frontend)
 - `POST /api/meals/import` — bulk import guest meals on registration `{ meals: [...] }`
 - `GET /api/meals?date=2026-03-20` — list meals for a day with totals
 - `GET /api/meals/history/range?from=...&to=...` — date range query
@@ -94,7 +95,8 @@ All authenticated routes require `Authorization: Bearer <token>` header. Guest e
 - `DELETE /api/meals/:id` — deletes meal + items
 
 ### Nutrition
-- `GET /api/nutrition/lookup?food=chicken+breast` — USDA/OFF lookup with cache
+- `GET /api/nutrition/search?q=chicken+breast&limit=5` — **no auth** — multi-result search (USDA with OFF fallback), returns per-serving + per-100g macros for portion scaling. Rate limited: 30 req / 15 min
+- `GET /api/nutrition/lookup?food=chicken+breast` — **auth required** — single-best USDA/OFF lookup with DB cache
 
 ### Goals
 - `GET /api/goals` — current daily macro goals
@@ -119,13 +121,13 @@ Gemini is the default (free tier, no billing needed). Ollama requires a local in
 ## Current State
 
 ### What works
-- Frontend: guest mode (try before sign up), login/register screens (shown as overlay), camera/gallery capture, base64 encoding + client-side downscaling, AI analysis via backend API, results display with macro rings and item breakdown, persistent daily log (localStorage for guests, DB for authenticated), delete meals, goals-based MacroRing max values, guest data migration to DB on registration, logo click navigates to fresh scan, scan state resets after adding meal to log, date-based daily view with prev/next navigation (meals and totals filtered per day for both guest and authenticated modes), meal detail view (click any logged meal to see full macro breakdown, image, item list, and notes), guest meal images persisted as downscaled data URLs in localStorage
-- Backend: all routes working, SQLite via Prisma, AI multi-provider dispatcher, USDA + Open Food Facts lookup with DB caching, JWT auth (crashes if JWT_SECRET missing), rate limiting on analyze + scan endpoints, serves static React build in production, guest analyze endpoint (no auth), bulk import endpoint for guest data migration, sanitized error messages (generic errors to client, full details server-side only)
+- Frontend: guest mode (try before sign up), login/register screens (shown as overlay), camera/gallery capture, base64 encoding + client-side downscaling, AI analysis via backend API, results display with macro rings and item breakdown, persistent daily log (localStorage for guests, DB for authenticated), delete meals, goals-based MacroRing max values, guest data migration to DB on registration, logo click navigates to fresh scan, scan state resets after adding meal to log, date-based daily view with prev/next navigation (meals and totals filtered per day for both guest and authenticated modes), meal detail view (click any logged meal to see full macro breakdown, image, item list, and notes), guest meal images persisted as downscaled data URLs in localStorage, portion editing via per-item multiplier (tap item → ×0.25 step stepper, macro rings and totals update in real-time, adjusted values saved to log), manual food entry via text search (USDA/OFF lookup with per-100g scaling, debounced search, gram-based portion input), meal type labels (Breakfast/Lunch/Dinner/Snack) with time-based auto-selection and grouped daily log
+- Backend: all routes working, SQLite via Prisma, AI multi-provider dispatcher, USDA + Open Food Facts lookup with DB caching (USDA searches Foundation + SR Legacy + FNDDS data types for broad coverage; OFF results filtered for English language, valid nutrition data, and rounded values), JWT auth (crashes if JWT_SECRET missing), rate limiting on analyze + scan + search endpoints, serves static React build in production, guest analyze endpoint (no auth), bulk import endpoint for guest data migration, sanitized error messages (generic errors to client, full details server-side only)
 - Deployment: Dockerfile + fly.toml ready for Fly.io
 - Dev access: Vite configured with `host: true` for LAN access (phone testing via local IP)
 
 ### What could be improved
-- The nutrition lookup service exists but nothing in the scan flow uses it yet — future enhancement is to cross-reference AI estimates against USDA data
+- The nutrition lookup service could be used to cross-reference AI estimates against USDA data for improved accuracy
 - No goals editing UI — PUT /api/goals endpoint exists but no frontend for it yet
 
 ## AI Response Schema
@@ -178,14 +180,14 @@ When ready for more users:
 - **Guest daily log**: Reads from `getGuestMealsByDate(selectedDate)` (localStorage, filtered by local date)
 - **Guest deletes**: Index-based `deleteGuestMeal(index)` on localStorage array
 - **Registration**: AuthScreen shown as overlay → on success, `importMeals()` sends localStorage meals to DB → `clearGuestMeals()` → app switches to authenticated mode
-- **Authenticated scans**: `POST /api/meals/scan` (with auth) → saved directly to DB
+- **Authenticated scans**: `POST /api/meals/analyze` (analyze only) → user edits portions → `POST /api/meals` (save with adjusted values + image)
 - **Authenticated daily log**: Reads from `GET /api/meals?date=...`
 - **Sign-up prompt**: Banner shown in daily log for guests with meals
 
 ## Security
 - **JWT_SECRET**: Required env var — server crashes on startup if not set. Use a random 32-byte hex string in production (`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`)
 - **Helmet**: Security headers (X-Content-Type-Options, X-Frame-Options, HSTS, CSP, etc.) via `helmet` middleware
-- **Rate limiting**: `/api/meals/analyze` and `/api/meals/scan` are rate-limited to 10 requests per 15 minutes per IP. `/api/auth/login` and `/api/auth/register` are rate-limited to 10 attempts per 15 minutes per IP. All via `express-rate-limit`
+- **Rate limiting**: `/api/meals/analyze` and `/api/meals/scan` are rate-limited to 10 requests per 15 minutes per IP. `/api/nutrition/search` is rate-limited to 100 requests per 15 minutes (higher to support search-as-you-type with 500ms debounce). `/api/auth/login` and `/api/auth/register` are rate-limited to 10 attempts per 15 minutes per IP. All via `express-rate-limit`
 - **Gemini API key restrictions**: Key restricted to Generative Language API only in Google Cloud Console. Free tier quotas enforce 5 RPM and 20 requests/day for gemini-2.5-flash
 - **CORS**: Currently open (`cors()` with no config) — restrict to your domain before deploying publicly
 - **API key in .env**: Gemini key is server-side only, never sent to the browser. Gemini's API passes the key as a URL query param — be aware this can appear in server/proxy logs
@@ -218,6 +220,9 @@ When ready for more users:
 - [x] Guest mode (try before sign up) with localStorage + DB migration
 - [x] Rate limiting on scan endpoint
 - [x] Date-based daily view with navigation (prev/next day, "Today" quick-jump)
+- [x] Portion editing — per-item multiplier on scan results before saving
+- [x] Manual food entry — text search using USDA/OFF with per-100g portion scaling
+- [x] Meal type labels — Breakfast/Lunch/Dinner/Snack with grouped daily log
 - [ ] PWA manifest + service worker for installable mobile app
 - [ ] Swap image storage to Cloudflare R2 when scaling
 - [ ] Weekly/monthly trends view with charts
@@ -229,8 +234,8 @@ When ready for more users:
 ## Enterprise Feature Roadmap
 
 ### Tier 1 — High impact, moderate effort
-1. **Manual food entry / text search** — Let users type "chicken breast 6oz" and get macros. Leverage the existing USDA/OFF nutrition lookup service (`services/nutrition.js`) that's built but unused in the scan flow
-2. **Meal type labels** — Categorize as Breakfast / Lunch / Dinner / Snack. Group meals visually in the daily log
+1. ~~**Manual food entry / text search**~~ ✅ Users can type food names, search USDA/OFF, adjust grams, add multiple items, pick meal type, and save. Uses `searchNutritionMultiple()` with per-100g scaling
+2. ~~**Meal type labels**~~ ✅ Meals categorized as Breakfast/Lunch/Dinner/Snack. `mealType` field on Meal model, auto-inferred from time of day, grouped rendering in daily log with per-group subtotals
 3. **Goals editing UI** — The `PUT /api/goals` endpoint exists, just needs a settings screen with sliders/inputs for calorie and macro targets
 4. **Weekly summary view** — Bar chart showing daily calories/protein over the past 7 days using the existing `/history/range` endpoint
 5. **Favorite/recent meals** — Quick re-log common meals without re-scanning. Save templates from previous scans
@@ -239,7 +244,7 @@ When ready for more users:
 6. **Weight tracking** — Daily weigh-in log + trend line chart. Critical for users tracking cut/bulk progress
 7. **Streak & consistency** — Show logging streak (e.g., "12 day streak"), daily check marks on a calendar heatmap
 8. **Water intake tracker** — Simple +250ml button with daily target and progress ring
-9. **Meal editing** — Adjust portion sizes or macros after AI analysis (AI is an estimate — users need to correct)
+9. ~~**Meal editing** — Adjust portion sizes or macros after AI analysis~~ ✅ Per-item multiplier on scan results (editing existing logged meals not yet supported)
 10. **Remaining macros** — Show "X calories left" / "X g protein left" prominently, not just totals vs. goals
 
 ### Tier 3 — Pro / monetization tier
@@ -263,5 +268,9 @@ When ready for more users:
 - New backend routes go in server/src/routes/ with their own Router
 - Keep AI provider logic in services/ai.js — add new providers there
 - API client centralizes all fetch calls, token management, 401 handling, and guest localStorage helpers in src/api.js
-- Guest mode: `analyzeMeal()` for no-auth scans, `getGuestMeals()`/`getGuestMealsByDate()`/`addGuestMeal()`/`deleteGuestMeal()`/`clearGuestMeals()` for localStorage, `importMeals()` for DB migration
+- Scan flow: both guest and authenticated use `analyzeMeal()` (analyze only) → user edits portions → save. Authenticated saves via `saveMeal()` → `POST /api/meals`. Guest saves via `addGuestMeal()` to localStorage
+- Manual entry flow: search foods via `searchNutrition()` (500ms debounced, errors keep previous results) → select food → adjust grams → macros scale via `per100g` data → add items → pick meal type → save with `provider: "manual"`
+- Guest localStorage helpers: `getGuestMeals()`/`getGuestMealsByDate()`/`addGuestMeal()`/`deleteGuestMeal()`/`clearGuestMeals()`, `importMeals()` for DB migration
 - Date helpers: `toLocalDateStr()` for consistent YYYY-MM-DD in local timezone, `formatDisplayDate()` for user-facing date strings
+- Meal type helpers: `inferMealType()` auto-selects based on time of day (both frontend + backend), `groupMealsByType()` groups meals for daily log rendering in fixed order (breakfast → lunch → dinner → snack)
+- Manual meals display: no-image meals show a colored circle with first letter of food name instead of photo thumbnail

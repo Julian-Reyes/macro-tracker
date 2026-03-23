@@ -7,7 +7,7 @@ async function searchUSDA(query) {
   const key = process.env.USDA_API_KEY;
   if (!key) return null;
 
-  const url = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${key}&query=${encodeURIComponent(query)}&pageSize=1&dataType=Survey%20(FNDDS)`;
+  const url = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${key}&query=${encodeURIComponent(query)}&pageSize=1&dataType=Survey%20(FNDDS),Foundation,SR%20Legacy`;
   const res = await fetch(url);
   if (!res.ok) return null;
 
@@ -34,7 +34,7 @@ async function searchUSDA(query) {
 
 // --- Open Food Facts (no key needed, good for Brazilian products) ---
 async function searchOpenFoodFacts(query) {
-  const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=1`;
+  const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&lc=en&cc=us&search_simple=1&action=process&json=1&page_size=1`;
   const res = await fetch(url);
   if (!res.ok) return null;
 
@@ -46,15 +46,110 @@ async function searchOpenFoodFacts(query) {
   return {
     source: "openfoodfacts",
     name: product.product_name || query,
-    servingSize: product.serving_quantity || 100,
+    servingSize: Math.round(product.serving_quantity || 100),
     servingUnit: "g",
-    calories: n["energy-kcal_100g"] || 0,
-    protein_g: n.proteins_100g || 0,
-    carbs_g: n.carbohydrates_100g || 0,
-    fat_g: n.fat_100g || 0,
-    fiber_g: n.fiber_100g || 0,
-    sugar_g: n.sugars_100g || 0,
+    calories: Math.round(n["energy-kcal_100g"] || 0),
+    protein_g: +(n.proteins_100g || 0).toFixed(1),
+    carbs_g: +(n.carbohydrates_100g || 0).toFixed(1),
+    fat_g: +(n.fat_100g || 0).toFixed(1),
+    fiber_g: +(n.fiber_100g || 0).toFixed(1),
+    sugar_g: +(n.sugars_100g || 0).toFixed(1),
   };
+}
+
+// --- Helper: normalize macros to per-100g ---
+function toPer100g(result) {
+  const s = result.servingSize || 100;
+  // OFF data is already per 100g; USDA is per serving
+  if (result.source === "openfoodfacts") {
+    return {
+      calories: result.calories,
+      protein_g: result.protein_g,
+      carbs_g: result.carbs_g,
+      fat_g: result.fat_g,
+      fiber_g: result.fiber_g,
+      sugar_g: result.sugar_g,
+    };
+  }
+  const factor = 100 / s;
+  return {
+    calories: Math.round(result.calories * factor),
+    protein_g: +(result.protein_g * factor).toFixed(1),
+    carbs_g: +(result.carbs_g * factor).toFixed(1),
+    fat_g: +(result.fat_g * factor).toFixed(1),
+    fiber_g: +(result.fiber_g * factor).toFixed(1),
+    sugar_g: +(result.sugar_g * factor).toFixed(1),
+  };
+}
+
+// --- Multi-result search (for manual food entry) ---
+export async function searchNutritionMultiple(query, limit = 5) {
+  const normalized = query.toLowerCase().trim();
+  const key = process.env.USDA_API_KEY;
+
+  // Try USDA first with multiple results
+  if (key) {
+    const url = `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${key}&query=${encodeURIComponent(normalized)}&pageSize=${limit}&dataType=Survey%20(FNDDS),Foundation,SR%20Legacy`;
+    const res = await fetch(url);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.foods?.length > 0) {
+        return data.foods.map((food) => {
+          const get = (name) => food.foodNutrients?.find((n) => n.nutrientName === name)?.value || 0;
+          const result = {
+            source: "usda",
+            fdcId: food.fdcId,
+            name: food.description,
+            servingSize: food.servingSize || 100,
+            servingUnit: food.servingSizeUnit || "g",
+            calories: get("Energy"),
+            protein_g: get("Protein"),
+            carbs_g: get("Carbohydrate, by difference"),
+            fat_g: get("Total lipid (fat)"),
+            fiber_g: get("Fiber, total dietary"),
+            sugar_g: get("Sugars, total including NLEA"),
+          };
+          result.per100g = toPer100g(result);
+          return result;
+        });
+      }
+    }
+  }
+
+  // Fall back to Open Food Facts
+  const offUrl = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(normalized)}&lc=en&cc=us&search_simple=1&action=process&json=1&page_size=${limit}`;
+  const offRes = await fetch(offUrl);
+  if (!offRes.ok) return [];
+
+  const offData = await offRes.json();
+  if (!offData.products?.length) return [];
+
+  return offData.products
+    .filter((p) => {
+      if (!p.nutriments) return false;
+      const name = p.product_name?.trim();
+      if (!name) return false;
+      const n = p.nutriments;
+      const hasData = (n["energy-kcal_100g"] || 0) + (n.proteins_100g || 0) + (n.carbohydrates_100g || 0) + (n.fat_100g || 0) > 0;
+      return hasData;
+    })
+    .map((product) => {
+      const n = product.nutriments;
+      const result = {
+        source: "openfoodfacts",
+        name: product.product_name || normalized,
+        servingSize: Math.round(product.serving_quantity || 100),
+        servingUnit: "g",
+        calories: Math.round(n["energy-kcal_100g"] || 0),
+        protein_g: +(n.proteins_100g || 0).toFixed(1),
+        carbs_g: +(n.carbohydrates_100g || 0).toFixed(1),
+        fat_g: +(n.fat_100g || 0).toFixed(1),
+        fiber_g: +(n.fiber_100g || 0).toFixed(1),
+        sugar_g: +(n.sugars_100g || 0).toFixed(1),
+      };
+      result.per100g = toPer100g(result);
+      return result;
+    });
 }
 
 // --- Combined lookup with cache ---

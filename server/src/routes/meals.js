@@ -8,6 +8,14 @@ import rateLimit from "express-rate-limit";
 import { authenticate } from "../middleware/auth.js";
 import { analyzeFood } from "../services/ai.js";
 
+function inferMealType(date) {
+  const hour = date.getHours();
+  if (hour < 10) return "breakfast";
+  if (hour < 14) return "lunch";
+  if (hour < 17) return "snack";
+  return "dinner";
+}
+
 const analyzeLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 10, // 10 requests per window
@@ -67,6 +75,7 @@ mealsRouter.post("/import", async (req, res) => {
           userId: req.userId,
           mealNotes: m.meal_notes || null,
           provider: m.provider || "gemini",
+          mealType: m.mealType || null,
           scannedAt: m.scannedAt ? new Date(m.scannedAt) : new Date(),
           items: {
             create: (m.items || []).map((item) => ({
@@ -89,6 +98,54 @@ mealsRouter.post("/import", async (req, res) => {
   } catch (err) {
     console.error("Import error:", err);
     res.status(500).json({ error: "Import failed" });
+  }
+});
+
+// POST /api/meals - save a pre-analyzed meal (after user edits portions)
+mealsRouter.post("/", async (req, res) => {
+  try {
+    const { items, meal_notes, image, mediaType, mealType } = req.body;
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: "No items provided" });
+    }
+
+    // Save image to disk if provided
+    let imageUrl = null;
+    if (image) {
+      const uploadDir = process.env.UPLOAD_DIR || "./uploads";
+      await mkdir(uploadDir, { recursive: true });
+      const filename = `${randomUUID()}.jpg`;
+      await writeFile(join(uploadDir, filename), Buffer.from(image, "base64"));
+      imageUrl = `/uploads/${filename}`;
+    }
+
+    const meal = await prisma.meal.create({
+      data: {
+        userId: req.userId,
+        imageUrl,
+        mealNotes: meal_notes || null,
+        provider: req.body.provider || "gemini",
+        mealType: mealType || inferMealType(new Date()),
+        items: {
+          create: items.map((item) => ({
+            name: item.name,
+            portion: item.portion,
+            calories: item.calories,
+            proteinG: item.protein_g ?? item.proteinG ?? 0,
+            carbsG: item.carbs_g ?? item.carbsG ?? 0,
+            fatG: item.fat_g ?? item.fatG ?? 0,
+            fiberG: item.fiber_g ?? item.fiberG ?? 0,
+            sugarG: item.sugar_g ?? item.sugarG ?? 0,
+          })),
+        },
+      },
+      include: { items: true },
+    });
+
+    res.status(201).json({ meal });
+  } catch (err) {
+    console.error("Save meal error:", err);
+    res.status(500).json({ error: "Failed to save meal" });
   }
 });
 
