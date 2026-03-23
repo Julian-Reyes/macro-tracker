@@ -76,6 +76,10 @@ export async function getMeals(date) {
   return apiFetch(`/meals?date=${dateStr}`);
 }
 
+export async function getMealsRange(from, to) {
+  return apiFetch(`/meals/history/range?from=${from}&to=${to}`);
+}
+
 export async function saveMeal(items, mealNotes, imageBase64, mediaType, mealType, provider) {
   return apiFetch('/meals', {
     method: 'POST',

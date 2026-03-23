@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import AuthScreen from "./AuthScreen";
 import {
-  getToken, clearToken, getMe, saveMeal, getMeals, deleteMeal, getGoals,
+  getToken, clearToken, getMe, saveMeal, getMeals, getMealsRange, deleteMeal, getGoals,
   downscaleImage, analyzeMeal, getGuestMeals, getGuestMealsByDate, addGuestMeal, deleteGuestMeal,
   searchNutrition,
 } from "./api";
@@ -63,6 +63,32 @@ function inferMealType(date = new Date()) {
   return "dinner";
 }
 
+function getWeekStartMonday(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  const day = date.getDay();
+  const diff = day === 0 ? 6 : day - 1;
+  date.setDate(date.getDate() - diff);
+  return toLocalDateStr(date);
+}
+
+function getWeekDays(weekStartStr) {
+  const [y, m, d] = weekStartStr.split('-').map(Number);
+  const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  return labels.map((label, i) => {
+    const date = new Date(y, m - 1, d + i);
+    return { date: toLocalDateStr(date), dayLabel: label };
+  });
+}
+
+function formatWeekRange(weekStartStr) {
+  const [y, m, d] = weekStartStr.split('-').map(Number);
+  const start = new Date(y, m - 1, d);
+  const end = new Date(y, m - 1, d + 6);
+  const fmt = (dt) => dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return `${fmt(start)} – ${fmt(end)}`;
+}
+
 const MEAL_TYPE_ORDER = ["breakfast", "lunch", "dinner", "snack"];
 const MEAL_TYPE_LABELS = { breakfast: "Breakfast", lunch: "Lunch", dinner: "Dinner", snack: "Snack" };
 
@@ -91,6 +117,58 @@ function MealTypePicker({ value, onChange }) {
         </button>
       ))}
     </div>
+  );
+}
+
+function WeeklyBarChart({ data, goal, todayStr, onBarTap }) {
+  const chartH = 170, chartTop = 15, chartLeft = 10, chartRight = 430;
+  const chartW = chartRight - chartLeft;
+  const barW = 40, gap = (chartW - barW * 7) / 6;
+  const maxCal = Math.max(goal, ...data.map(d => d.calories));
+  const scaleMax = maxCal * 1.15 || 1;
+  const goalY = chartTop + chartH - (goal / scaleMax) * chartH;
+
+  return (
+    <svg viewBox="0 0 440 230" style={{ width: "100%", display: "block" }}>
+      <defs>
+        <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#E8C872" />
+          <stop offset="100%" stopColor="#D4A843" />
+        </linearGradient>
+      </defs>
+      {/* Goal line */}
+      <line x1={chartLeft} y1={goalY} x2={chartRight} y2={goalY}
+        stroke="#E8C872" strokeWidth="1" strokeDasharray="6 4" opacity={0.3} />
+      <text x={chartRight + 4} y={goalY + 3} fill="#E8C872" fontSize="9"
+        fontFamily="'DM Sans',sans-serif" opacity={0.4}>{goal}</text>
+      {/* Bars */}
+      {data.map((day, i) => {
+        const x = chartLeft + i * (barW + gap);
+        const isToday = day.date === todayStr;
+        const isFuture = day.date > todayStr;
+        const h = day.calories > 0 ? Math.max((day.calories / scaleMax) * chartH, 4) : 3;
+        const y = chartTop + chartH - h;
+        return (
+          <g key={day.date} onClick={() => !isFuture && onBarTap(day.date)} style={{ cursor: isFuture ? "default" : "pointer" }}>
+            <rect x={x} y={y} width={barW} height={h} rx={3}
+              fill={isFuture ? "rgba(255,255,255,0.04)" : day.calories > 0 ? "url(#barGrad)" : "rgba(255,255,255,0.06)"}
+              stroke={isToday ? "#E8C872" : "none"} strokeWidth={isToday ? 1.5 : 0}
+              opacity={isFuture ? 0.3 : 1}
+            />
+            <text x={x + barW / 2} y={y - 5} textAnchor="middle"
+              fill={isFuture ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.6)"}
+              fontSize="10" fontWeight="600" fontFamily="'DM Sans',sans-serif">
+              {isFuture ? "–" : day.calories > 0 ? day.calories : "–"}
+            </text>
+            <text x={x + barW / 2} y={chartTop + chartH + 18} textAnchor="middle"
+              fill={isToday ? "#E8C872" : "rgba(255,255,255,0.35)"}
+              fontSize="11" fontWeight={isToday ? 600 : 400} fontFamily="'DM Sans',sans-serif">
+              {day.dayLabel}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
   );
 }
 
@@ -252,6 +330,9 @@ export default function App() {
   const [manualItems, setManualItems] = useState([]);
   const [selectedFood, setSelectedFood] = useState(null);
   const [manualGrams, setManualGrams] = useState(100);
+  // Weekly view state
+  const [weeklyData, setWeeklyData] = useState([]);
+  const [weeklyLoading, setWeeklyLoading] = useState(false);
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const searchTimeoutRef = useRef(null);
@@ -259,12 +340,21 @@ export default function App() {
   const isGuest = !user;
   const todayStr = toLocalDateStr();
   const isToday = selectedDate === todayStr;
+  const [weekStart, setWeekStart] = useState(() => getWeekStartMonday(todayStr));
+  const isCurrentWeek = weekStart === getWeekStartMonday(todayStr);
 
   const changeDate = (delta) => {
     const [y, m, d] = selectedDate.split('-').map(Number);
     const date = new Date(y, m - 1, d + delta);
     const newStr = toLocalDateStr(date);
     if (newStr <= todayStr) setSelectedDate(newStr);
+  };
+
+  const changeWeek = (delta) => {
+    const [y, m, d] = weekStart.split('-').map(Number);
+    const date = new Date(y, m - 1, d + delta * 7);
+    const newStart = getWeekStartMonday(toLocalDateStr(date));
+    if (newStart <= getWeekStartMonday(todayStr)) setWeekStart(newStart);
   };
 
   // Check for existing auth on mount (non-blocking — app shows immediately)
@@ -310,6 +400,57 @@ export default function App() {
       getGoals().then(g => setGoals(g)).catch(() => {});
     }
   }, [user, refreshData]);
+
+  // Load weekly data
+  const loadWeeklyData = useCallback(async () => {
+    setWeeklyLoading(true);
+    try {
+      const days = getWeekDays(weekStart);
+      const dailyMap = {};
+      for (const day of days) {
+        dailyMap[day.date] = { ...day, calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
+      }
+
+      let meals;
+      if (user) {
+        meals = await getMealsRange(days[0].date, days[6].date);
+      } else {
+        const allGuest = getGuestMeals();
+        meals = allGuest.filter(m => {
+          const d = toLocalDateStr(new Date(m.scannedAt));
+          return d >= days[0].date && d <= days[6].date;
+        });
+      }
+
+      for (const meal of meals) {
+        const dateStr = toLocalDateStr(new Date(meal.scannedAt));
+        if (dailyMap[dateStr]) {
+          for (const item of meal.items) {
+            const n = normalizeItem(item);
+            dailyMap[dateStr].calories += n.calories;
+            dailyMap[dateStr].protein_g += n.protein_g;
+            dailyMap[dateStr].carbs_g += n.carbs_g;
+            dailyMap[dateStr].fat_g += n.fat_g;
+          }
+        }
+      }
+      setWeeklyData(days.map(d => ({
+        ...dailyMap[d.date],
+        calories: Math.round(dailyMap[d.date].calories),
+        protein_g: Math.round(dailyMap[d.date].protein_g),
+        carbs_g: Math.round(dailyMap[d.date].carbs_g),
+        fat_g: Math.round(dailyMap[d.date].fat_g),
+      })));
+    } catch (err) {
+      if (err.status === 401) setUser(null);
+    } finally {
+      setWeeklyLoading(false);
+    }
+  }, [weekStart, user]);
+
+  useEffect(() => {
+    if (view === "weekly") loadWeeklyData();
+  }, [view, weekStart, loadWeeklyData]);
 
   // Initialize adjustments and meal type when analysis changes
   useEffect(() => {
@@ -636,8 +777,12 @@ export default function App() {
               fontSize: "11px", fontWeight: 600, fontFamily: "'DM Sans',sans-serif",
             }}>Sign up</button>
           )}
-          {["capture", "daily"].map(v => (
-            <button key={v} onClick={() => { setView(v); if (v === "daily") refreshData(); }} style={{
+          {["capture", "daily", "weekly"].map(v => (
+            <button key={v} onClick={() => {
+              setView(v);
+              if (v === "daily") refreshData();
+              if (v === "weekly") loadWeeklyData();
+            }} style={{
               padding: "6px 14px", borderRadius: "20px", border: "none", cursor: "pointer",
               fontSize: "12px", fontWeight: 500, fontFamily: "'DM Sans',sans-serif",
               textTransform: "uppercase", letterSpacing: "0.5px",
@@ -645,7 +790,7 @@ export default function App() {
               color: view === v || (v === "capture" && (view === "result" || view === "manual")) ? "#E8C872" : "rgba(255,255,255,0.3)",
               transition: "all 0.2s"
             }}>
-              {v === "capture" ? "Scan" : `Log (${dailyLog.length})`}
+              {v === "capture" ? "Scan" : v === "daily" ? `Log (${dailyLog.length})` : "Stats"}
             </button>
           ))}
         </div>
@@ -1058,6 +1203,130 @@ export default function App() {
               <p style={{ color: "#E87272", fontSize: "13px", textAlign: "center", marginTop: "12px" }}>{error}</p>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Weekly Stats View */}
+      {view === "weekly" && (
+        <div style={{ animation: "fadeSlideIn 0.3s ease-out" }}>
+          {/* Week Navigation */}
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: "16px 20px 0", gap: "8px"
+          }}>
+            <button onClick={() => changeWeek(-1)} style={{
+              width: "32px", height: "32px", borderRadius: "50%", border: "none",
+              background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.5)",
+              cursor: "pointer", fontSize: "18px", display: "flex", alignItems: "center", justifyContent: "center",
+              fontFamily: "'DM Sans',sans-serif",
+            }}>‹</button>
+            <span style={{
+              fontSize: "15px", fontWeight: 600, minWidth: "180px", textAlign: "center",
+              color: isCurrentWeek ? "#E8C872" : "rgba(255,255,255,0.7)",
+            }}>
+              {isCurrentWeek ? "This Week" : formatWeekRange(weekStart)}
+            </span>
+            <button onClick={() => changeWeek(1)} disabled={isCurrentWeek} style={{
+              width: "32px", height: "32px", borderRadius: "50%", border: "none",
+              background: isCurrentWeek ? "transparent" : "rgba(255,255,255,0.04)",
+              color: isCurrentWeek ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.5)",
+              cursor: isCurrentWeek ? "default" : "pointer", fontSize: "18px",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontFamily: "'DM Sans',sans-serif",
+            }}>›</button>
+            {!isCurrentWeek && (
+              <button onClick={() => setWeekStart(getWeekStartMonday(todayStr))} style={{
+                padding: "4px 12px", borderRadius: "12px", border: "none",
+                background: "rgba(232,200,114,0.1)", color: "#E8C872",
+                cursor: "pointer", fontSize: "11px", fontWeight: 600,
+                fontFamily: "'DM Sans',sans-serif",
+              }}>This Week</button>
+            )}
+          </div>
+
+          {weeklyLoading ? (
+            <div style={{ padding: "32px 20px", textAlign: "center" }}>
+              <div style={{
+                height: "3px", borderRadius: "2px", margin: "0 auto 16px", width: "200px",
+                background: "linear-gradient(90deg, transparent, #E8C872, transparent)",
+                backgroundSize: "200% 100%", animation: "shimmer 1.5s infinite"
+              }} />
+              <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "13px" }}>Loading stats...</p>
+            </div>
+          ) : weeklyData.length > 0 ? (
+            <>
+              {/* Bar Chart */}
+              <div style={{ padding: "16px 10px 0" }}>
+                <WeeklyBarChart
+                  data={weeklyData}
+                  goal={goals.calories}
+                  todayStr={todayStr}
+                  onBarTap={(dateStr) => { setSelectedDate(dateStr); setView("daily"); }}
+                />
+              </div>
+
+              {/* Summary Stats */}
+              {(() => {
+                const daysLogged = weeklyData.filter(d => d.calories > 0);
+                const n = daysLogged.length || 1;
+                const totals = weeklyData.reduce((acc, d) => ({
+                  calories: acc.calories + d.calories,
+                  protein_g: acc.protein_g + d.protein_g,
+                  carbs_g: acc.carbs_g + d.carbs_g,
+                  fat_g: acc.fat_g + d.fat_g,
+                }), { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 });
+                const atGoal = daysLogged.filter(d => d.calories >= goals.calories * 0.9 && d.calories <= goals.calories * 1.1).length;
+
+                return (
+                  <div style={{
+                    margin: "0 20px 16px", padding: "16px", borderRadius: "12px",
+                    background: "rgba(255,255,255,0.015)", border: "1px solid rgba(255,255,255,0.04)",
+                  }}>
+                    <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.25)", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "12px" }}>
+                      Daily Averages <span style={{ color: "rgba(255,255,255,0.15)" }}>({n} day{n > 1 ? "s" : ""})</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-around", marginBottom: "16px" }}>
+                      {[
+                        { label: "Calories", value: Math.round(totals.calories / n), color: "#E8C872" },
+                        { label: "Protein", value: `${Math.round(totals.protein_g / n)}g`, color: "#7BE0AD" },
+                        { label: "Carbs", value: `${Math.round(totals.carbs_g / n)}g`, color: "#72B4E8" },
+                        { label: "Fat", value: `${Math.round(totals.fat_g / n)}g`, color: "#E87272" },
+                      ].map(({ label, value, color }) => (
+                        <div key={label} style={{ textAlign: "center" }}>
+                          <div style={{ fontSize: "18px", fontWeight: 700, color }}>{value}</div>
+                          <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.3)", textTransform: "uppercase" }}>{label}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: "12px", display: "flex", justifyContent: "space-around" }}>
+                      {[
+                        { label: "Total Cal", value: totals.calories.toLocaleString(), color: "#E8C872" },
+                        { label: "Total Protein", value: `${totals.protein_g}g`, color: "#7BE0AD" },
+                        { label: "Days Logged", value: daysLogged.length, color: "rgba(255,255,255,0.6)" },
+                        { label: "At Goal", value: atGoal, color: atGoal > 0 ? "#7BE0AD" : "rgba(255,255,255,0.3)" },
+                      ].map(({ label, value, color }) => (
+                        <div key={label} style={{ textAlign: "center" }}>
+                          <div style={{ fontSize: "14px", fontWeight: 600, color }}>{value}</div>
+                          <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.3)", textTransform: "uppercase" }}>{label}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+            </>
+          ) : (
+            <div style={{ padding: "60px 20px", textAlign: "center" }}>
+              <p style={{ color: "rgba(255,255,255,0.2)", fontSize: "14px" }}>
+                No meals logged this week
+              </p>
+              <button onClick={() => setView("capture")} style={{
+                marginTop: "16px", padding: "10px 24px", borderRadius: "10px", border: "none", cursor: "pointer",
+                background: "rgba(232,200,114,0.1)", color: "#E8C872",
+                fontSize: "13px", fontFamily: "'DM Sans',sans-serif"
+              }}>Scan your first meal</button>
+            </div>
+          )}
         </div>
       )}
 
