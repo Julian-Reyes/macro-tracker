@@ -31,6 +31,9 @@ macro-tracker/
 ├── vite.config.js        # Dev proxy: /api + /uploads → localhost:3001
 ├── Dockerfile            # Production build for Fly.io
 ├── fly.toml              # Fly.io deployment config
+├── .github/
+│   └── workflows/
+│       └── deploy.yml    # GitHub Actions: auto-deploy frontend to Pages on push
 └── package.json          # Frontend deps
 ```
 
@@ -43,7 +46,7 @@ macro-tracker/
 - **Nutrition data**: USDA FoodData Central API + Open Food Facts (cached in DB)
 - **Image storage**: Local disk (swap for Cloudflare R2 when scaling)
 - **Image optimization**: Client-side canvas downscaling to max 1024px before upload
-- **Hosting**: Fly.io (free tier) — serves Express + static React build from single instance
+- **Hosting**: Split — frontend on GitHub Pages (julianreyes.dev/macro-tracker/) via GitHub Actions, backend on Fly.io (macro-tracker.fly.dev) via manual `fly deploy`
 
 ## Setup
 
@@ -68,12 +71,25 @@ npm run build                    # builds React to /dist
 node server/src/index.js         # serves both API + static build
 ```
 
-### Deploy to Fly.io
-```bash
-fly launch                       # first time: creates app + volume
-fly secrets set JWT_SECRET=... GEMINI_API_KEY=...
-fly deploy
-```
+### Deploy
+
+**Frontend** (auto on push to main):
+- GitHub Actions workflow builds Vite app and deploys to GitHub Pages
+- `VITE_API_URL` GitHub repo secret gets baked into the build
+- Live at: https://julianreyes.dev/macro-tracker/
+
+**Backend** (manual):
+- `fly deploy -a macro-tracker` from project root
+- Fly.io secrets: `JWT_SECRET`, `GEMINI_API_KEY`, `CORS_ORIGIN`
+- Live at: https://macro-tracker.fly.dev
+
+**Environment secrets:**
+| Secret | Where | Value |
+|--------|-------|-------|
+| `VITE_API_URL` | GitHub repo → Settings → Secrets → Actions | `https://macro-tracker.fly.dev/api` |
+| `JWT_SECRET` | Fly.io secrets | Random 32-byte hex |
+| `GEMINI_API_KEY` | Fly.io secrets | Google AI Studio key |
+| `CORS_ORIGIN` | Fly.io secrets | `https://julianreyes.dev` |
 
 ## API Endpoints
 
@@ -121,9 +137,9 @@ Gemini is the default (free tier, no billing needed). Ollama requires a local in
 ## Current State
 
 ### What works
-- Frontend: guest mode (try before sign up), login/register screens (shown as overlay), camera/gallery capture, base64 encoding + client-side downscaling, AI analysis via backend API, results display with macro rings and item breakdown, persistent daily log (localStorage for guests, DB for authenticated), delete meals, goals-based MacroRing max values, guest data migration to DB on registration, logo click navigates to fresh scan, scan state resets after adding meal to log, date-based daily view with prev/next navigation (meals and totals filtered per day for both guest and authenticated modes), meal detail view (click any logged meal to see full macro breakdown, image, item list, and notes), guest meal images persisted as downscaled data URLs in localStorage, portion editing via per-item multiplier (tap item → ×0.25 step stepper, macro rings and totals update in real-time, adjusted values saved to log), manual food entry via text search (USDA/OFF lookup with per-100g scaling, debounced search, gram-based portion input), meal type labels (Breakfast/Lunch/Dinner/Snack) with time-based auto-selection and grouped daily log, weekly summary view with interactive SVG bar chart (metric switching between calories/protein/carbs/fat, week navigation, tap bar to jump to daily view), add extra items to scanned meals (inline USDA/OFF search in result view, combined with AI-analyzed items before saving), remaining macros display on daily view ("X left" / "X over" for each macro, shown only on today when meals are logged)
+- Frontend: guest mode (try before sign up), login/register screens (shown as overlay), camera/gallery capture, base64 encoding + client-side downscaling, AI analysis via backend API, results display with macro rings and item breakdown, persistent daily log (localStorage for guests, DB for authenticated), delete meals, goals-based MacroRing max values, guest data migration to DB on registration, logo click navigates to fresh scan, scan state resets after adding meal to log, date-based daily view with prev/next navigation (meals and totals filtered per day for both guest and authenticated modes), meal detail view (click any logged meal to see full macro breakdown, image, item list, and notes), guest meal images persisted as downscaled data URLs in localStorage, portion editing via per-item multiplier (tap item → ×0.25 step stepper, macro rings and totals update in real-time, adjusted values saved to log), manual food entry via text search (USDA/OFF lookup with per-100g scaling, debounced search, gram-based portion input), meal type labels (Breakfast/Lunch/Dinner/Snack) with time-based auto-selection and grouped daily log, weekly summary view with interactive SVG bar chart (metric switching between calories/protein/carbs/fat, week navigation, tap bar to jump to daily view), add extra items to scanned meals (inline USDA/OFF search in result view, combined with AI-analyzed items before saving), remaining macros display on daily view ("# MACRO Remaining" format, shown only on today when meals are logged), unified ItemRow component for all food items (AI-analyzed, search-added extras, manual entries) with consistent macro bars and removable via ✕ on expand
 - Backend: all routes working, SQLite via Prisma, AI multi-provider dispatcher, USDA + Open Food Facts lookup with DB caching (USDA searches Foundation + SR Legacy + FNDDS data types for broad coverage; OFF results filtered for English language, valid nutrition data, and rounded values), JWT auth (crashes if JWT_SECRET missing), rate limiting on analyze + scan + search endpoints, serves static React build in production, guest analyze endpoint (no auth), bulk import endpoint for guest data migration, sanitized error messages (generic errors to client, full details server-side only)
-- Deployment: Dockerfile + fly.toml ready for Fly.io
+- Deployment: Live — frontend auto-deploys to GitHub Pages on push, backend on Fly.io (manual `fly deploy`). Fly.io volume mounts /data for SQLite + uploads
 - Dev access: Vite configured with `host: true` for LAN access (phone testing via local IP)
 
 ### What could be improved
@@ -167,6 +183,7 @@ Every provider must return this exact JSON (enforced by system prompt):
 - **Why JWT over sessions**: Stateless, works with mobile/PWA, no session store needed
 - **Why local disk for images**: Simplest starting point. Plan is Cloudflare R2 (10GB free) when deploying at scale. The image_url column stores a relative path that's easy to swap later
 - **Ollama integration**: For fully local/free operation. User has an M1 Mac Mini (16GB) that can run llama3.2-vision (11B, Q4, ~7.9GB). Ollama serves an OpenAI-ish API at localhost:11434
+- **Why split hosting (GitHub Pages + Fly.io)**: GitHub Pages is free with fast CDN and works with existing custom domain (julianreyes.dev). Fly.io needed for backend because it supports persistent volumes (SQLite + uploads) and always-on servers. Frontend deploys are zero-config (push to main)
 
 ## Scaling Path
 When ready for more users:
@@ -187,17 +204,15 @@ When ready for more users:
 ## Security
 - **JWT_SECRET**: Required env var — server crashes on startup if not set. Use a random 32-byte hex string in production (`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`)
 - **Helmet**: Security headers (X-Content-Type-Options, X-Frame-Options, HSTS, CSP, etc.) via `helmet` middleware
-- **Rate limiting**: `/api/meals/analyze` and `/api/meals/scan` are rate-limited to 10 requests per 15 minutes per IP. `/api/nutrition/search` is rate-limited to 100 requests per 15 minutes (higher to support search-as-you-type with 500ms debounce). `/api/auth/login` and `/api/auth/register` are rate-limited to 10 attempts per 15 minutes per IP. All via `express-rate-limit`
+- **Rate limiting**: `/api/meals/analyze` and `/api/meals/scan` are rate-limited to 10 requests per 15 minutes per IP. `/api/meals/import` is rate-limited to 5 requests per hour per IP. `/api/nutrition/search` is rate-limited to 100 requests per 15 minutes (higher to support search-as-you-type with 500ms debounce). `/api/auth/login` and `/api/auth/register` are rate-limited to 10 attempts per 15 minutes per IP. All via `express-rate-limit`
 - **Gemini API key restrictions**: Key restricted to Generative Language API only in Google Cloud Console. Free tier quotas enforce 5 RPM and 20 requests/day for gemini-2.5-flash
-- **CORS**: Currently open (`cors()` with no config) — restrict to your domain before deploying publicly
+- **CORS**: Restricted via `CORS_ORIGIN` env var on Fly.io (set to `https://julianreyes.dev`). Defaults to `http://localhost:3000` in dev
 - **API key in .env**: Gemini key is server-side only, never sent to the browser. Gemini's API passes the key as a URL query param — be aware this can appear in server/proxy logs
-- **Error messages**: Some routes send `err.message` to the client, which can leak internals from Prisma or AI providers — sanitize before public deployment
+- **Error messages**: All routes return generic error messages to clients; full errors logged server-side only
 - **Input validation**: Username must be 3-20 chars (letters, numbers, underscores). Password must be at least 6 chars. Validated server-side in auth routes
+- **Image type validation**: Upload endpoints validate mediaType against whitelist (JPEG, PNG, WebP, HEIC/HEIF). Invalid types rejected with 400
+- **Import limits**: `/api/meals/import` capped at 50 meals per request, rate-limited to 5 req/hour
 - **Remaining hardening** (not yet implemented):
-  - Validate uploaded file types (check mediaType is actually an image)
-  - Cap `/api/meals/import` array size
-  - ~~Sanitize error messages~~ ✅ All routes return generic error messages; full errors logged server-side only
-  - Restrict CORS to specific origin via env var
   - Short-lived access tokens + refresh token rotation (currently 30-day JWTs with no revocation)
 - **Future options for hardening `/analyze` (unauthenticated)**:
   - API key or CAPTCHA on guest analyze endpoint
@@ -211,6 +226,8 @@ When ready for more users:
 - The multer upload and base64 JSON body are both supported in POST /scan — frontend uses base64 JSON
 - The Vite dev proxy handles /api and /uploads routing to :3001 — in production Express serves everything from one port
 - Guest meal images are stored as data URLs in localStorage (~50-200KB each). localStorage has a ~5MB limit, so this works for ~25-100 guest meals before hitting the cap — fine for "try before sign up" usage
+- Frontend deploys automatically on push to main (GitHub Actions). Backend does NOT auto-deploy — run `fly deploy -a macro-tracker` manually for server changes
+- `VITE_API_URL` is baked into the frontend build at deploy time. Changing the backend URL requires re-running the GitHub Actions workflow
 
 ## Planned Improvements
 - [x] Connect frontend to backend API
@@ -232,6 +249,7 @@ When ready for more users:
 - [ ] Model switcher UI (dropdown in settings to pick AI provider)
 - [ ] Goals editing UI
 - [ ] Enhance accuracy: use AI for food identification + USDA for verified macros
+- [ ] Auto-deploy backend to Fly.io via GitHub Actions (currently manual `fly deploy`)
 
 ## Enterprise Feature Roadmap
 
@@ -270,11 +288,13 @@ When ready for more users:
 - New backend routes go in server/src/routes/ with their own Router
 - Keep AI provider logic in services/ai.js — add new providers there
 - API client centralizes all fetch calls, token management, 401 handling, and guest localStorage helpers in src/api.js
-- Scan flow: both guest and authenticated use `analyzeMeal()` (analyze only) → user edits portions → optionally add extra items via inline search (`extraItems` state, `addExtraItemToScan()`) → save. Authenticated saves via `saveMeal()` → `POST /api/meals`. Guest saves via `addGuestMeal()` to localStorage. `adjustedItems` useMemo combines scanned items (with multipliers) + extra items for totals and saving
-- Manual entry flow: search foods via `searchNutrition()` (500ms debounced, errors keep previous results) → select food → adjust grams → macros scale via `per100g` data → add items → pick meal type → save with `provider: "manual"`
+- Scan flow: both guest and authenticated use `analyzeMeal()` (analyze only) → user edits portions → optionally add extra items via inline search (`extraItems` state, `addExtraItemToScan()`) → save. Authenticated saves via `saveMeal()` → `POST /api/meals`. Guest saves via `addGuestMeal()` to localStorage. `adjustedItems` useMemo combines scanned items (with multipliers) + extra items for totals and saving. AI items removable via `removeAnalysisItem()` (removes from both `analysis.items` and `itemAdjustments`)
+- Manual entry flow: search foods via `searchNutrition()` (500ms debounced, errors keep previous results) → select food → adjust grams → macros scale via `per100g` data → add items → pick meal type → save with `provider: "manual"`. Manual items use `ItemRow` with MacroRing running totals
+- ItemRow component: unified display for all food items (AI-analyzed, extra search items, manual entries). Shows name, portion, calories, P/C/F macro bars. Tap to expand: AI items show ×multiplier controls + ✕ remove, extra/manual items show ✕ only (`onMultiplierChange={null}` hides −/+ controls)
 - Guest localStorage helpers: `getGuestMeals()`/`getGuestMealsByDate()`/`addGuestMeal()`/`deleteGuestMeal()`/`clearGuestMeals()`, `importMeals()` for DB migration
 - Date helpers: `toLocalDateStr()` for consistent YYYY-MM-DD in local timezone, `formatDisplayDate()` for user-facing date strings
 - Meal type helpers: `inferMealType()` auto-selects based on time of day (both frontend + backend), `groupMealsByType()` groups meals for daily log rendering in fixed order (breakfast → lunch → dinner → snack)
 - Manual meals display: no-image meals show a colored circle with first letter of food name instead of photo thumbnail
 - Weekly view: `WeeklyBarChart` pure SVG component with `METRIC_CONFIG` for metric switching, `loadWeeklyData` callback groups meals by date, `weeklyMetric` state controls which macro the chart displays
-- Remaining macros: inline computation in daily view JSX (goal - current), shown only when `isToday && dailyLog.length > 0`, handles under/at/over states with color coding
+- Remaining macros: inline computation in daily view JSX (goal - current), shown only when `isToday && dailyLog.length > 0`, three-row layout (number → macro label → "Remaining"/"Over"), labels and numbers use macro colors
+- MacroRing labels use their corresponding macro color (gold/green/blue/red), not dimmed white

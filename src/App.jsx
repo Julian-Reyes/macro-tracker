@@ -211,14 +211,14 @@ function MacroRing({ value, max, color, label, unit }) {
           {unit}
         </text>
       </svg>
-      <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)", fontWeight: 500, letterSpacing: "0.5px", textTransform: "uppercase" }}>
+      <span style={{ fontSize: "11px", color, fontWeight: 500, letterSpacing: "0.5px", textTransform: "uppercase" }}>
         {label}
       </span>
     </div>
   );
 }
 
-function ItemRow({ item, index, expanded, multiplier, editable, onToggle, onMultiplierChange }) {
+function ItemRow({ item, index, expanded, multiplier, editable, onToggle, onMultiplierChange, onRemove }) {
   const macroBar = (val, max, color) => (
     <div style={{ height: "3px", background: "rgba(255,255,255,0.06)", borderRadius: "2px", flex: 1 }}>
       <div style={{
@@ -233,11 +233,20 @@ function ItemRow({ item, index, expanded, multiplier, editable, onToggle, onMult
 
   return (
     <div style={{
+      position: "relative",
       background: expanded ? "rgba(232,200,114,0.03)" : "rgba(255,255,255,0.02)",
       borderBottom: "1px solid rgba(255,255,255,0.04)",
       animation: `fadeSlideIn 0.4s ${index * 0.08}s both ease-out`,
       transition: "background 0.2s",
     }}>
+      {expanded && editable && onRemove && (
+        <button onClick={(e) => { e.stopPropagation(); onRemove(); }} style={{
+          position: "absolute", top: "5px", right: "8px", zIndex: 1,
+          width: "20px", height: "20px", borderRadius: "50%", border: "none", cursor: "pointer",
+          background: "rgba(232,114,114,0.1)", color: "#E87272", fontSize: "10px",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>✕</button>
+      )}
       <div
         onClick={editable ? onToggle : undefined}
         style={{
@@ -286,33 +295,37 @@ function ItemRow({ item, index, expanded, multiplier, editable, onToggle, onMult
           display: "flex", alignItems: "center", justifyContent: "center",
           gap: "20px", padding: "4px 20px 16px",
         }}>
-          <button
-            onClick={(e) => { e.stopPropagation(); onMultiplierChange(Math.max(0.25, multiplier - 0.25)); }}
-            style={{
-              width: "36px", height: "36px", borderRadius: "50%",
-              border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.04)",
-              color: "#fff", cursor: "pointer", fontSize: "18px",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontFamily: "'DM Sans',sans-serif",
-            }}
-          >−</button>
-          <span style={{
-            fontSize: "18px", fontWeight: 700, minWidth: "50px", textAlign: "center",
-            color: isAdjusted ? "#E8C872" : "rgba(255,255,255,0.5)",
-            fontVariantNumeric: "tabular-nums",
-          }}>
-            {parseFloat(multiplier.toFixed(2))}×
-          </span>
-          <button
-            onClick={(e) => { e.stopPropagation(); onMultiplierChange(multiplier + 0.25); }}
-            style={{
-              width: "36px", height: "36px", borderRadius: "50%",
-              border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.04)",
-              color: "#fff", cursor: "pointer", fontSize: "18px",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontFamily: "'DM Sans',sans-serif",
-            }}
-          >+</button>
+          {onMultiplierChange && (
+            <>
+              <button
+                onClick={(e) => { e.stopPropagation(); onMultiplierChange(Math.max(0.25, multiplier - 0.25)); }}
+                style={{
+                  width: "36px", height: "36px", borderRadius: "50%",
+                  border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.04)",
+                  color: "#fff", cursor: "pointer", fontSize: "18px",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontFamily: "'DM Sans',sans-serif",
+                }}
+              >−</button>
+              <span style={{
+                fontSize: "18px", fontWeight: 700, minWidth: "50px", textAlign: "center",
+                color: isAdjusted ? "#E8C872" : "rgba(255,255,255,0.5)",
+                fontVariantNumeric: "tabular-nums",
+              }}>
+                {parseFloat(multiplier.toFixed(2))}×
+              </span>
+              <button
+                onClick={(e) => { e.stopPropagation(); onMultiplierChange(multiplier + 0.25); }}
+                style={{
+                  width: "36px", height: "36px", borderRadius: "50%",
+                  border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.04)",
+                  color: "#fff", cursor: "pointer", fontSize: "18px",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontFamily: "'DM Sans',sans-serif",
+                }}
+              >+</button>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -345,7 +358,9 @@ export default function App() {
   const [manualItems, setManualItems] = useState([]);
   const [selectedFood, setSelectedFood] = useState(null);
   const [manualGrams, setManualGrams] = useState(100);
+  const [expandedManualIndex, setExpandedManualIndex] = useState(null);
   const [extraItems, setExtraItems] = useState([]);
+  const [expandedExtraIndex, setExpandedExtraIndex] = useState(null);
   const [addingExtraItem, setAddingExtraItem] = useState(false);
   // Weekly view state
   const [weeklyData, setWeeklyData] = useState([]);
@@ -519,6 +534,15 @@ export default function App() {
     setItemAdjustments(prev => prev.map((adj, i) =>
       i === index ? { ...adj, multiplier: Math.max(0.25, newMultiplier) } : adj
     ));
+  };
+
+  const removeAnalysisItem = (index) => {
+    setAnalysis(prev => ({
+      ...prev,
+      items: prev.items.filter((_, i) => i !== index),
+    }));
+    setItemAdjustments(prev => prev.filter((_, i) => i !== index));
+    setExpandedItemIndex(null);
   };
 
   const handleAuth = (authedUser) => {
@@ -996,42 +1020,22 @@ export default function App() {
                           multiplier={itemAdjustments[i]?.multiplier ?? 1.0}
                           onToggle={() => setExpandedItemIndex(expandedItemIndex === i ? null : i)}
                           onMultiplierChange={(val) => updateItemMultiplier(i, val)}
+                          onRemove={() => removeAnalysisItem(i)}
                         />
                       );
                     })}
                     {extraItems.map((item, i) => (
-                      <div key={`extra-${i}`} style={{
-                        display: "flex", alignItems: "center", gap: "12px", padding: "14px 20px",
-                        borderBottom: "1px solid rgba(255,255,255,0.04)",
-                        background: "rgba(123,224,173,0.02)",
-                        animation: "fadeSlideIn 0.3s ease-out",
-                      }}>
-                        <div style={{
-                          width: "22px", height: "22px", borderRadius: "6px", display: "flex",
-                          alignItems: "center", justifyContent: "center", flexShrink: 0,
-                          background: "rgba(123,224,173,0.1)", fontSize: "10px", color: "#7BE0AD",
-                          fontWeight: 700,
-                        }}>{item.name.charAt(0).toUpperCase()}</div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "4px" }}>
-                            <span style={{ fontSize: "14px", fontWeight: 600, color: "#fff" }}>{item.name}</span>
-                            <span style={{ color: "#E8C872", fontSize: "14px", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{item.calories} cal</span>
-                          </div>
-                          <div style={{ display: "flex", gap: "8px", fontSize: "11px", color: "rgba(255,255,255,0.35)" }}>
-                            <span>{item.portion}</span>
-                            <span style={{ color: "#7BE0AD" }}>P {item.protein_g}g</span>
-                            <span style={{ color: "#72B4E8" }}>C {item.carbs_g}g</span>
-                            <span style={{ color: "#E87272" }}>F {item.fat_g}g</span>
-                          </div>
-                        </div>
-                        {!mealDetailMode && (
-                          <button onClick={() => removeExtraItem(i)} style={{
-                            width: "24px", height: "24px", borderRadius: "50%", border: "none", cursor: "pointer",
-                            background: "rgba(232,114,114,0.1)", color: "#E87272", fontSize: "12px",
-                            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                          }}>✕</button>
-                        )}
-                      </div>
+                      <ItemRow
+                        key={`extra-${i}`}
+                        item={item}
+                        index={analysis.items.length + i}
+                        editable={!mealDetailMode}
+                        expanded={expandedExtraIndex === i}
+                        multiplier={1.0}
+                        onToggle={() => setExpandedExtraIndex(expandedExtraIndex === i ? null : i)}
+                        onMultiplierChange={null}
+                        onRemove={() => removeExtraItem(i)}
+                      />
                     ))}
                     {!mealDetailMode && (
                       <div style={{ padding: "12px 20px" }}>
@@ -1324,56 +1328,39 @@ export default function App() {
                 <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.25)", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 500 }}>
                   Your items ({manualItems.length})
                 </span>
-                {manualItems.map((item, i) => {
+                {manualItems.map((item, i) => (
+                  <ItemRow
+                    key={i}
+                    item={item}
+                    index={i}
+                    editable={true}
+                    expanded={expandedManualIndex === i}
+                    multiplier={1.0}
+                    onToggle={() => setExpandedManualIndex(expandedManualIndex === i ? null : i)}
+                    onMultiplierChange={null}
+                    onRemove={() => setManualItems(prev => prev.filter((_, j) => j !== i))}
+                  />
+                ))}
+                {/* Running totals — MacroRings */}
+                {(() => {
+                  const t = manualItems.reduce((acc, it) => ({
+                    calories: acc.calories + it.calories,
+                    protein_g: +(acc.protein_g + it.protein_g).toFixed(1),
+                    carbs_g: +(acc.carbs_g + it.carbs_g).toFixed(1),
+                    fat_g: +(acc.fat_g + it.fat_g).toFixed(1),
+                  }), { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 });
                   return (
-                    <div key={i} style={{
-                      display: "flex", alignItems: "center", gap: "12px", padding: "10px 14px",
-                      marginTop: "8px", borderRadius: "10px", background: "rgba(255,255,255,0.02)",
-                      border: "1px solid rgba(255,255,255,0.06)",
+                    <div style={{
+                      display: "flex", justifyContent: "space-around", padding: "12px 0", marginTop: "8px",
+                      borderTop: "1px solid rgba(255,255,255,0.06)",
                     }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: "13px", fontWeight: 500 }}>{item.name}</div>
-                        <div style={{ display: "flex", gap: "8px", fontSize: "11px", color: "rgba(255,255,255,0.35)", marginTop: "2px" }}>
-                          <span style={{ color: "#E8C872" }}>{item.calories} cal</span>
-                          <span>{item.portion}</span>
-                          <span>P {item.protein_g}g</span>
-                          <span>C {item.carbs_g}g</span>
-                          <span>F {item.fat_g}g</span>
-                        </div>
-                      </div>
-                      <button onClick={() => setManualItems(prev => prev.filter((_, j) => j !== i))} style={{
-                        width: "24px", height: "24px", borderRadius: "50%", border: "none", cursor: "pointer",
-                        background: "rgba(232,114,114,0.1)", color: "#E87272", fontSize: "12px",
-                        display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                      }}>✕</button>
+                      <MacroRing value={t.calories} max={goals.calories} color="#E8C872" label="Calories" unit="kcal" />
+                      <MacroRing value={t.protein_g} max={goals.proteinG} color="#7BE0AD" label="Protein" unit="g" />
+                      <MacroRing value={t.carbs_g} max={goals.carbsG} color="#72B4E8" label="Carbs" unit="g" />
+                      <MacroRing value={t.fat_g} max={goals.fatG} color="#E87272" label="Fat" unit="g" />
                     </div>
                   );
-                })}
-                {/* Running totals */}
-                <div style={{
-                  display: "flex", justifyContent: "space-around", padding: "12px 0", marginTop: "8px",
-                  borderTop: "1px solid rgba(255,255,255,0.06)",
-                }}>
-                  {(() => {
-                    const t = manualItems.reduce((acc, it) => ({
-                      calories: acc.calories + it.calories,
-                      protein_g: +(acc.protein_g + it.protein_g).toFixed(1),
-                      carbs_g: +(acc.carbs_g + it.carbs_g).toFixed(1),
-                      fat_g: +(acc.fat_g + it.fat_g).toFixed(1),
-                    }), { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 });
-                    return [
-                      { label: "Cal", value: t.calories, color: "#E8C872" },
-                      { label: "Protein", value: `${t.protein_g}g`, color: "#7BE0AD" },
-                      { label: "Carbs", value: `${t.carbs_g}g`, color: "#72B4E8" },
-                      { label: "Fat", value: `${t.fat_g}g`, color: "#E87272" },
-                    ].map(({ label, value, color }) => (
-                      <div key={label} style={{ textAlign: "center" }}>
-                        <div style={{ fontSize: "14px", fontWeight: 700, color }}>{value}</div>
-                        <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.3)", textTransform: "uppercase" }}>{label}</div>
-                      </div>
-                    ));
-                  })()}
-                </div>
+                })()}
               </div>
             )}
 
@@ -1598,14 +1585,14 @@ export default function App() {
                     }}>
                       {atGoal ? "On target" : `${Math.abs(Math.round(remaining))}${unit}`}
                     </div>
-                    {!atGoal && (
-                      <div style={{ fontSize: "10px", color: over ? "rgba(232,114,114,0.4)" : "rgba(255,255,255,0.3)" }}>
-                        {over ? "over" : "left"}
-                      </div>
-                    )}
-                    <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.25)", textTransform: "uppercase", marginTop: "2px" }}>
+                    <div style={{ fontSize: "9px", color: atGoal ? color : over ? "rgba(232,114,114,0.7)" : color, textTransform: "uppercase", fontWeight: 700, marginTop: "2px" }}>
                       {label}
                     </div>
+                    {!atGoal && (
+                      <div style={{ fontSize: "10px", color: over ? "rgba(232,114,114,0.4)" : "rgba(255,255,255,0.3)" }}>
+                        {over ? "Over" : "Remaining"}
+                      </div>
+                    )}
                   </div>
                 );
               })}
