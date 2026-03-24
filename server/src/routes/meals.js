@@ -16,10 +16,20 @@ function inferMealType(date) {
   return "dinner";
 }
 
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+
 const analyzeLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 10, // 10 requests per window
   message: { error: "Too many analysis requests. Please try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const importLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5,
+  message: { error: "Too many import requests. Please try again later." },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -44,6 +54,10 @@ mealsRouter.post("/analyze", analyzeLimiter, upload.single("image"), async (req,
       return res.status(400).json({ error: "No image provided" });
     }
 
+    if (!ALLOWED_IMAGE_TYPES.includes(mediaType)) {
+      return res.status(400).json({ error: "Invalid image type. Allowed: JPEG, PNG, WebP, HEIC" });
+    }
+
     const provider = req.body.provider || undefined;
     const { data: analysis, provider: usedProvider } = await analyzeFood(base64, mediaType, provider);
 
@@ -58,7 +72,7 @@ mealsRouter.post("/analyze", analyzeLimiter, upload.single("image"), async (req,
 mealsRouter.use(authenticate);
 
 // POST /api/meals/import - bulk import guest meals on registration
-mealsRouter.post("/import", async (req, res) => {
+mealsRouter.post("/import", importLimiter, async (req, res) => {
   try {
     const { meals } = req.body;
     if (!Array.isArray(meals) || meals.length === 0) {
@@ -112,6 +126,9 @@ mealsRouter.post("/", async (req, res) => {
     // Save image to disk if provided
     let imageUrl = null;
     if (image) {
+      if (mediaType && !ALLOWED_IMAGE_TYPES.includes(mediaType)) {
+        return res.status(400).json({ error: "Invalid image type. Allowed: JPEG, PNG, WebP, HEIC" });
+      }
       const uploadDir = process.env.UPLOAD_DIR || "./uploads";
       await mkdir(uploadDir, { recursive: true });
       const filename = `${randomUUID()}.jpg`;
@@ -164,6 +181,10 @@ mealsRouter.post("/scan", analyzeLimiter, upload.single("image"), async (req, re
       mediaType = req.body.mediaType || "image/jpeg";
     } else {
       return res.status(400).json({ error: "No image provided" });
+    }
+
+    if (!ALLOWED_IMAGE_TYPES.includes(mediaType)) {
+      return res.status(400).json({ error: "Invalid image type. Allowed: JPEG, PNG, WebP, HEIC" });
     }
 
     const provider = req.body.provider || undefined;

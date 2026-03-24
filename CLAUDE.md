@@ -121,7 +121,7 @@ Gemini is the default (free tier, no billing needed). Ollama requires a local in
 ## Current State
 
 ### What works
-- Frontend: guest mode (try before sign up), login/register screens (shown as overlay), camera/gallery capture, base64 encoding + client-side downscaling, AI analysis via backend API, results display with macro rings and item breakdown, persistent daily log (localStorage for guests, DB for authenticated), delete meals, goals-based MacroRing max values, guest data migration to DB on registration, logo click navigates to fresh scan, scan state resets after adding meal to log, date-based daily view with prev/next navigation (meals and totals filtered per day for both guest and authenticated modes), meal detail view (click any logged meal to see full macro breakdown, image, item list, and notes), guest meal images persisted as downscaled data URLs in localStorage, portion editing via per-item multiplier (tap item → ×0.25 step stepper, macro rings and totals update in real-time, adjusted values saved to log), manual food entry via text search (USDA/OFF lookup with per-100g scaling, debounced search, gram-based portion input), meal type labels (Breakfast/Lunch/Dinner/Snack) with time-based auto-selection and grouped daily log
+- Frontend: guest mode (try before sign up), login/register screens (shown as overlay), camera/gallery capture, base64 encoding + client-side downscaling, AI analysis via backend API, results display with macro rings and item breakdown, persistent daily log (localStorage for guests, DB for authenticated), delete meals, goals-based MacroRing max values, guest data migration to DB on registration, logo click navigates to fresh scan, scan state resets after adding meal to log, date-based daily view with prev/next navigation (meals and totals filtered per day for both guest and authenticated modes), meal detail view (click any logged meal to see full macro breakdown, image, item list, and notes), guest meal images persisted as downscaled data URLs in localStorage, portion editing via per-item multiplier (tap item → ×0.25 step stepper, macro rings and totals update in real-time, adjusted values saved to log), manual food entry via text search (USDA/OFF lookup with per-100g scaling, debounced search, gram-based portion input), meal type labels (Breakfast/Lunch/Dinner/Snack) with time-based auto-selection and grouped daily log, weekly summary view with interactive SVG bar chart (metric switching between calories/protein/carbs/fat, week navigation, tap bar to jump to daily view), add extra items to scanned meals (inline USDA/OFF search in result view, combined with AI-analyzed items before saving), remaining macros display on daily view ("X left" / "X over" for each macro, shown only on today when meals are logged)
 - Backend: all routes working, SQLite via Prisma, AI multi-provider dispatcher, USDA + Open Food Facts lookup with DB caching (USDA searches Foundation + SR Legacy + FNDDS data types for broad coverage; OFF results filtered for English language, valid nutrition data, and rounded values), JWT auth (crashes if JWT_SECRET missing), rate limiting on analyze + scan + search endpoints, serves static React build in production, guest analyze endpoint (no auth), bulk import endpoint for guest data migration, sanitized error messages (generic errors to client, full details server-side only)
 - Deployment: Dockerfile + fly.toml ready for Fly.io
 - Dev access: Vite configured with `host: true` for LAN access (phone testing via local IP)
@@ -225,7 +225,9 @@ When ready for more users:
 - [x] Meal type labels — Breakfast/Lunch/Dinner/Snack with grouped daily log
 - [ ] PWA manifest + service worker for installable mobile app
 - [ ] Swap image storage to Cloudflare R2 when scaling
-- [ ] Weekly/monthly trends view with charts
+- [x] Weekly summary view with interactive SVG bar chart and metric switching
+- [x] Add extra items to scanned meals via inline search
+- [x] Remaining macros display on daily view
 - [ ] Portuguese language support
 - [ ] Model switcher UI (dropdown in settings to pick AI provider)
 - [ ] Goals editing UI
@@ -237,7 +239,7 @@ When ready for more users:
 1. ~~**Manual food entry / text search**~~ ✅ Users can type food names, search USDA/OFF, adjust grams, add multiple items, pick meal type, and save. Uses `searchNutritionMultiple()` with per-100g scaling
 2. ~~**Meal type labels**~~ ✅ Meals categorized as Breakfast/Lunch/Dinner/Snack. `mealType` field on Meal model, auto-inferred from time of day, grouped rendering in daily log with per-group subtotals
 3. **Goals editing UI** — The `PUT /api/goals` endpoint exists, just needs a settings screen with sliders/inputs for calorie and macro targets
-4. **Weekly summary view** — Bar chart showing daily calories/protein over the past 7 days using the existing `/history/range` endpoint
+4. ~~**Weekly summary view**~~ ✅ Interactive SVG bar chart with metric switching (calories/protein/carbs/fat), week navigation, daily averages and totals, tap bar to jump to daily view. Uses existing `/history/range` endpoint
 5. **Favorite/recent meals** — Quick re-log common meals without re-scanning. Save templates from previous scans
 
 ### Tier 2 — Differentiating features
@@ -245,7 +247,7 @@ When ready for more users:
 7. **Streak & consistency** — Show logging streak (e.g., "12 day streak"), daily check marks on a calendar heatmap
 8. **Water intake tracker** — Simple +250ml button with daily target and progress ring
 9. ~~**Meal editing** — Adjust portion sizes or macros after AI analysis~~ ✅ Per-item multiplier on scan results (editing existing logged meals not yet supported)
-10. **Remaining macros** — Show "X calories left" / "X g protein left" prominently, not just totals vs. goals
+10. ~~**Remaining macros**~~ ✅ Daily view shows "X left" / "X over" / "On target" for each macro below the MacroRings. Only displayed on today when meals are logged. Color-coded: macro color for under goal, dimmed red for over goal
 
 ### Tier 3 — Pro / monetization tier
 11. **Barcode scanner** — Scan packaged food UPC, query Open Food Facts API for exact nutrition
@@ -268,9 +270,11 @@ When ready for more users:
 - New backend routes go in server/src/routes/ with their own Router
 - Keep AI provider logic in services/ai.js — add new providers there
 - API client centralizes all fetch calls, token management, 401 handling, and guest localStorage helpers in src/api.js
-- Scan flow: both guest and authenticated use `analyzeMeal()` (analyze only) → user edits portions → save. Authenticated saves via `saveMeal()` → `POST /api/meals`. Guest saves via `addGuestMeal()` to localStorage
+- Scan flow: both guest and authenticated use `analyzeMeal()` (analyze only) → user edits portions → optionally add extra items via inline search (`extraItems` state, `addExtraItemToScan()`) → save. Authenticated saves via `saveMeal()` → `POST /api/meals`. Guest saves via `addGuestMeal()` to localStorage. `adjustedItems` useMemo combines scanned items (with multipliers) + extra items for totals and saving
 - Manual entry flow: search foods via `searchNutrition()` (500ms debounced, errors keep previous results) → select food → adjust grams → macros scale via `per100g` data → add items → pick meal type → save with `provider: "manual"`
 - Guest localStorage helpers: `getGuestMeals()`/`getGuestMealsByDate()`/`addGuestMeal()`/`deleteGuestMeal()`/`clearGuestMeals()`, `importMeals()` for DB migration
 - Date helpers: `toLocalDateStr()` for consistent YYYY-MM-DD in local timezone, `formatDisplayDate()` for user-facing date strings
 - Meal type helpers: `inferMealType()` auto-selects based on time of day (both frontend + backend), `groupMealsByType()` groups meals for daily log rendering in fixed order (breakfast → lunch → dinner → snack)
 - Manual meals display: no-image meals show a colored circle with first letter of food name instead of photo thumbnail
+- Weekly view: `WeeklyBarChart` pure SVG component with `METRIC_CONFIG` for metric switching, `loadWeeklyData` callback groups meals by date, `weeklyMetric` state controls which macro the chart displays
+- Remaining macros: inline computation in daily view JSX (goal - current), shown only when `isToday && dailyLog.length > 0`, handles under/at/over states with color coding

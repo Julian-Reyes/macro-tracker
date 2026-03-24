@@ -120,48 +120,63 @@ function MealTypePicker({ value, onChange }) {
   );
 }
 
-function WeeklyBarChart({ data, goal, todayStr, onBarTap }) {
+const METRIC_CONFIG = {
+  calories: { key: "calories", color: "#E8C872", colorDark: "#D4A843", unit: "", label: "Calories" },
+  protein_g: { key: "protein_g", color: "#7BE0AD", colorDark: "#4CB97A", unit: "g", label: "Protein" },
+  carbs_g: { key: "carbs_g", color: "#72B4E8", colorDark: "#4A8FC0", unit: "g", label: "Carbs" },
+  fat_g: { key: "fat_g", color: "#E87272", colorDark: "#C05050", unit: "g", label: "Fat" },
+};
+
+function WeeklyBarChart({ data, goal, todayStr, onBarTap, metric = "calories" }) {
+  const cfg = METRIC_CONFIG[metric] || METRIC_CONFIG.calories;
   const chartH = 170, chartTop = 15, chartLeft = 10, chartRight = 430;
   const chartW = chartRight - chartLeft;
   const barW = 40, gap = (chartW - barW * 7) / 6;
-  const maxCal = Math.max(goal, ...data.map(d => d.calories));
-  const scaleMax = maxCal * 1.15 || 1;
-  const goalY = chartTop + chartH - (goal / scaleMax) * chartH;
+  const values = data.map(d => d[cfg.key] || 0);
+  const maxVal = Math.max(goal || 0, ...values);
+  const scaleMax = maxVal * 1.15 || 1;
+  const hasGoal = goal > 0;
+  const goalY = hasGoal ? chartTop + chartH - (goal / scaleMax) * chartH : 0;
 
   return (
     <svg viewBox="0 0 440 230" style={{ width: "100%", display: "block" }}>
       <defs>
         <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#E8C872" />
-          <stop offset="100%" stopColor="#D4A843" />
+          <stop offset="0%" stopColor={cfg.color} />
+          <stop offset="100%" stopColor={cfg.colorDark} />
         </linearGradient>
       </defs>
       {/* Goal line */}
-      <line x1={chartLeft} y1={goalY} x2={chartRight} y2={goalY}
-        stroke="#E8C872" strokeWidth="1" strokeDasharray="6 4" opacity={0.3} />
-      <text x={chartRight + 4} y={goalY + 3} fill="#E8C872" fontSize="9"
-        fontFamily="'DM Sans',sans-serif" opacity={0.4}>{goal}</text>
+      {hasGoal && (
+        <>
+          <line x1={chartLeft} y1={goalY} x2={chartRight} y2={goalY}
+            stroke={cfg.color} strokeWidth="1" strokeDasharray="6 4" opacity={0.3} />
+          <text x={chartRight + 4} y={goalY + 3} fill={cfg.color} fontSize="9"
+            fontFamily="'DM Sans',sans-serif" opacity={0.4}>{goal}{cfg.unit}</text>
+        </>
+      )}
       {/* Bars */}
       {data.map((day, i) => {
         const x = chartLeft + i * (barW + gap);
         const isToday = day.date === todayStr;
         const isFuture = day.date > todayStr;
-        const h = day.calories > 0 ? Math.max((day.calories / scaleMax) * chartH, 4) : 3;
+        const val = day[cfg.key] || 0;
+        const h = val > 0 ? Math.max((val / scaleMax) * chartH, 4) : 3;
         const y = chartTop + chartH - h;
         return (
           <g key={day.date} onClick={() => !isFuture && onBarTap(day.date)} style={{ cursor: isFuture ? "default" : "pointer" }}>
             <rect x={x} y={y} width={barW} height={h} rx={3}
-              fill={isFuture ? "rgba(255,255,255,0.04)" : day.calories > 0 ? "url(#barGrad)" : "rgba(255,255,255,0.06)"}
-              stroke={isToday ? "#E8C872" : "none"} strokeWidth={isToday ? 1.5 : 0}
+              fill={isFuture ? "rgba(255,255,255,0.04)" : val > 0 ? "url(#barGrad)" : "rgba(255,255,255,0.06)"}
+              stroke={isToday ? cfg.color : "none"} strokeWidth={isToday ? 1.5 : 0}
               opacity={isFuture ? 0.3 : 1}
             />
             <text x={x + barW / 2} y={y - 5} textAnchor="middle"
               fill={isFuture ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.6)"}
               fontSize="10" fontWeight="600" fontFamily="'DM Sans',sans-serif">
-              {isFuture ? "–" : day.calories > 0 ? day.calories : "–"}
+              {isFuture ? "–" : val > 0 ? `${val}${cfg.unit}` : "–"}
             </text>
             <text x={x + barW / 2} y={chartTop + chartH + 18} textAnchor="middle"
-              fill={isToday ? "#E8C872" : "rgba(255,255,255,0.35)"}
+              fill={isToday ? cfg.color : "rgba(255,255,255,0.35)"}
               fontSize="11" fontWeight={isToday ? 600 : 400} fontFamily="'DM Sans',sans-serif">
               {day.dayLabel}
             </text>
@@ -330,9 +345,12 @@ export default function App() {
   const [manualItems, setManualItems] = useState([]);
   const [selectedFood, setSelectedFood] = useState(null);
   const [manualGrams, setManualGrams] = useState(100);
+  const [extraItems, setExtraItems] = useState([]);
+  const [addingExtraItem, setAddingExtraItem] = useState(false);
   // Weekly view state
   const [weeklyData, setWeeklyData] = useState([]);
   const [weeklyLoading, setWeeklyLoading] = useState(false);
+  const [weeklyMetric, setWeeklyMetric] = useState("calories");
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const searchTimeoutRef = useRef(null);
@@ -457,6 +475,8 @@ export default function App() {
     if (analysis) {
       setItemAdjustments(analysis.items.map(() => ({ multiplier: 1.0 })));
       setExpandedItemIndex(null);
+      setExtraItems([]);
+      setAddingExtraItem(false);
       if (!mealDetailMode) setSelectedMealType(inferMealType());
     } else {
       setItemAdjustments([]);
@@ -483,7 +503,8 @@ export default function App() {
         sugar_g: +((item.sugar_g ?? 0) * mult).toFixed(1),
       };
     });
-    const totals = items.reduce((acc, item) => ({
+    const allItems = [...items, ...extraItems];
+    const totals = allItems.reduce((acc, item) => ({
       calories: acc.calories + item.calories,
       protein_g: +(acc.protein_g + (item.protein_g ?? 0)).toFixed(1),
       carbs_g: +(acc.carbs_g + (item.carbs_g ?? 0)).toFixed(1),
@@ -491,8 +512,8 @@ export default function App() {
       fiber_g: +(acc.fiber_g + (item.fiber_g ?? 0)).toFixed(1),
       sugar_g: +(acc.sugar_g + (item.sugar_g ?? 0)).toFixed(1),
     }), { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0, sugar_g: 0 });
-    return { adjustedItems: items, adjustedTotals: totals };
-  }, [analysis, itemAdjustments]);
+    return { adjustedItems: allItems, adjustedTotals: totals };
+  }, [analysis, itemAdjustments, extraItems]);
 
   const updateItemMultiplier = (index, newMultiplier) => {
     setItemAdjustments(prev => prev.map((adj, i) =>
@@ -563,6 +584,8 @@ export default function App() {
     setError(null);
     setScaledImageData(null);
     setMealDetailMode(false);
+    setExtraItems([]);
+    setAddingExtraItem(false);
     setView("daily");
     // New meals are always "today" — navigate there and refresh
     if (selectedDate !== todayStr) {
@@ -620,6 +643,23 @@ export default function App() {
     setManualResults([]);
   };
 
+  const addExtraItemToScan = () => {
+    if (!selectedFood || !scaledFoodMacros) return;
+    setExtraItems(prev => [...prev, {
+      name: selectedFood.name,
+      portion: `${manualGrams}g`,
+      ...scaledFoodMacros,
+    }]);
+    setSelectedFood(null);
+    setManualQuery("");
+    setManualResults([]);
+    setAddingExtraItem(false);
+  };
+
+  const removeExtraItem = (index) => {
+    setExtraItems(prev => prev.filter((_, i) => i !== index));
+  };
+
   const addManualToDaily = async () => {
     if (manualItems.length === 0) return;
     try {
@@ -656,6 +696,8 @@ export default function App() {
     setManualResults([]);
     setManualItems([]);
     setSelectedFood(null);
+    setExtraItems([]);
+    setAddingExtraItem(false);
     setView("capture");
   };
 
@@ -942,18 +984,167 @@ export default function App() {
                         <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.15)" }}>tap to adjust</span>
                       )}
                     </div>
-                    {(adjustedItems || analysis.items).map((item, i) => (
-                      <ItemRow
-                        key={i}
-                        item={item}
-                        index={i}
-                        editable={!mealDetailMode}
-                        expanded={expandedItemIndex === i}
-                        multiplier={itemAdjustments[i]?.multiplier ?? 1.0}
-                        onToggle={() => setExpandedItemIndex(expandedItemIndex === i ? null : i)}
-                        onMultiplierChange={(val) => updateItemMultiplier(i, val)}
-                      />
+                    {analysis.items.map((_, i) => {
+                      const item = adjustedItems ? adjustedItems[i] : analysis.items[i];
+                      return (
+                        <ItemRow
+                          key={i}
+                          item={item}
+                          index={i}
+                          editable={!mealDetailMode}
+                          expanded={expandedItemIndex === i}
+                          multiplier={itemAdjustments[i]?.multiplier ?? 1.0}
+                          onToggle={() => setExpandedItemIndex(expandedItemIndex === i ? null : i)}
+                          onMultiplierChange={(val) => updateItemMultiplier(i, val)}
+                        />
+                      );
+                    })}
+                    {extraItems.map((item, i) => (
+                      <div key={`extra-${i}`} style={{
+                        display: "flex", alignItems: "center", gap: "12px", padding: "14px 20px",
+                        borderBottom: "1px solid rgba(255,255,255,0.04)",
+                        background: "rgba(123,224,173,0.02)",
+                        animation: "fadeSlideIn 0.3s ease-out",
+                      }}>
+                        <div style={{
+                          width: "22px", height: "22px", borderRadius: "6px", display: "flex",
+                          alignItems: "center", justifyContent: "center", flexShrink: 0,
+                          background: "rgba(123,224,173,0.1)", fontSize: "10px", color: "#7BE0AD",
+                          fontWeight: 700,
+                        }}>{item.name.charAt(0).toUpperCase()}</div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "4px" }}>
+                            <span style={{ fontSize: "14px", fontWeight: 600, color: "#fff" }}>{item.name}</span>
+                            <span style={{ color: "#E8C872", fontSize: "14px", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{item.calories} cal</span>
+                          </div>
+                          <div style={{ display: "flex", gap: "8px", fontSize: "11px", color: "rgba(255,255,255,0.35)" }}>
+                            <span>{item.portion}</span>
+                            <span style={{ color: "#7BE0AD" }}>P {item.protein_g}g</span>
+                            <span style={{ color: "#72B4E8" }}>C {item.carbs_g}g</span>
+                            <span style={{ color: "#E87272" }}>F {item.fat_g}g</span>
+                          </div>
+                        </div>
+                        {!mealDetailMode && (
+                          <button onClick={() => removeExtraItem(i)} style={{
+                            width: "24px", height: "24px", borderRadius: "50%", border: "none", cursor: "pointer",
+                            background: "rgba(232,114,114,0.1)", color: "#E87272", fontSize: "12px",
+                            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                          }}>✕</button>
+                        )}
+                      </div>
                     ))}
+                    {!mealDetailMode && (
+                      <div style={{ padding: "12px 20px" }}>
+                        {!addingExtraItem ? (
+                          <button onClick={() => { setAddingExtraItem(true); setManualQuery(""); setManualResults([]); setSelectedFood(null); }} style={{
+                            width: "100%", padding: "10px", borderRadius: "10px", border: "1px dashed rgba(255,255,255,0.12)",
+                            background: "transparent", color: "rgba(255,255,255,0.35)", cursor: "pointer",
+                            fontSize: "13px", fontFamily: "'DM Sans',sans-serif",
+                          }}>+ Add Item</button>
+                        ) : (
+                          <div>
+                            <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+                              <input
+                                type="text"
+                                value={manualQuery}
+                                onChange={(e) => handleManualSearch(e.target.value)}
+                                placeholder="Search foods..."
+                                autoFocus
+                                style={{
+                                  flex: 1, padding: "10px 14px", borderRadius: "10px",
+                                  border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)",
+                                  color: "#fff", fontSize: "13px", fontFamily: "'DM Sans',sans-serif", outline: "none",
+                                }}
+                              />
+                              <button onClick={() => { setAddingExtraItem(false); setManualQuery(""); setManualResults([]); setSelectedFood(null); }} style={{
+                                padding: "10px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.1)",
+                                background: "transparent", color: "rgba(255,255,255,0.4)", cursor: "pointer",
+                                fontSize: "14px", fontFamily: "'DM Sans',sans-serif",
+                              }}>✕</button>
+                            </div>
+                            {manualSearching && (
+                              <div style={{
+                                height: "3px", borderRadius: "2px", marginBottom: "12px", width: "100%",
+                                background: "linear-gradient(90deg, transparent, #E8C872, transparent)",
+                                backgroundSize: "200% 100%", animation: "shimmer 1.5s infinite",
+                              }} />
+                            )}
+                            {manualResults.length > 0 && !selectedFood && (
+                              <div style={{ marginBottom: "12px" }}>
+                                {manualResults.map((food, i) => (
+                                  <div key={i} onClick={() => selectFood(food)} style={{
+                                    padding: "10px 12px", marginBottom: "6px", borderRadius: "8px", cursor: "pointer",
+                                    background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)",
+                                  }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "3px" }}>
+                                      <span style={{ fontSize: "12px", fontWeight: 500, color: "#fff" }}>{food.name}</span>
+                                      <span style={{ fontSize: "11px", color: "#E8C872", fontWeight: 600 }}>{Math.round(food.per100g?.calories || food.calories)} cal</span>
+                                    </div>
+                                    <div style={{ display: "flex", gap: "8px", fontSize: "10px", color: "rgba(255,255,255,0.3)" }}>
+                                      <span style={{
+                                        padding: "1px 5px", borderRadius: "3px", fontSize: "8px", fontWeight: 600,
+                                        background: food.source === "usda" ? "rgba(123,224,173,0.1)" : "rgba(114,180,232,0.1)",
+                                        color: food.source === "usda" ? "#7BE0AD" : "#72B4E8",
+                                        textTransform: "uppercase",
+                                      }}>{food.source === "usda" ? "USDA" : "OFF"}</span>
+                                      <span>P {+(food.per100g?.protein_g ?? food.protein_g).toFixed(1)}g</span>
+                                      <span>C {+(food.per100g?.carbs_g ?? food.carbs_g).toFixed(1)}g</span>
+                                      <span>F {+(food.per100g?.fat_g ?? food.fat_g).toFixed(1)}g</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {selectedFood && scaledFoodMacros && (
+                              <div style={{
+                                padding: "14px", borderRadius: "10px",
+                                background: "rgba(232,200,114,0.04)", border: "1px solid rgba(232,200,114,0.1)",
+                              }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "10px" }}>
+                                  <span style={{ fontSize: "13px", fontWeight: 600, color: "#fff" }}>{selectedFood.name}</span>
+                                  <button onClick={() => { setSelectedFood(null); setManualResults([]); setManualQuery(""); }} style={{
+                                    background: "none", border: "none", color: "rgba(255,255,255,0.3)", cursor: "pointer", fontSize: "12px",
+                                  }}>✕</button>
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
+                                  <label style={{ fontSize: "11px", color: "rgba(255,255,255,0.4)" }}>Amount:</label>
+                                  <input
+                                    type="number"
+                                    value={manualGrams}
+                                    onChange={(e) => setManualGrams(Math.max(1, parseInt(e.target.value) || 1))}
+                                    style={{
+                                      width: "70px", padding: "6px 10px", borderRadius: "8px",
+                                      border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)",
+                                      color: "#fff", fontSize: "13px", fontWeight: 600, textAlign: "center",
+                                      fontFamily: "'DM Sans',sans-serif", outline: "none",
+                                    }}
+                                  />
+                                  <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.4)" }}>grams</span>
+                                </div>
+                                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px" }}>
+                                  {[
+                                    { label: "Cal", value: scaledFoodMacros.calories, color: "#E8C872" },
+                                    { label: "P", value: `${scaledFoodMacros.protein_g}g`, color: "#7BE0AD" },
+                                    { label: "C", value: `${scaledFoodMacros.carbs_g}g`, color: "#72B4E8" },
+                                    { label: "F", value: `${scaledFoodMacros.fat_g}g`, color: "#E87272" },
+                                  ].map(({ label, value, color }) => (
+                                    <div key={label} style={{ textAlign: "center" }}>
+                                      <div style={{ fontSize: "14px", fontWeight: 700, color }}>{value}</div>
+                                      <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.3)", textTransform: "uppercase" }}>{label}</div>
+                                    </div>
+                                  ))}
+                                </div>
+                                <button onClick={addExtraItemToScan} style={{
+                                  width: "100%", padding: "8px", borderRadius: "8px", border: "none", cursor: "pointer",
+                                  background: "linear-gradient(135deg, #E8C872, #D4A843)", color: "#0C0C0E",
+                                  fontSize: "12px", fontWeight: 700, fontFamily: "'DM Sans',sans-serif",
+                                }}>+ Add</button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Meal Notes */}
@@ -1259,9 +1450,10 @@ export default function App() {
               <div style={{ padding: "16px 10px 0" }}>
                 <WeeklyBarChart
                   data={weeklyData}
-                  goal={goals.calories}
+                  goal={weeklyMetric === "calories" ? goals.calories : weeklyMetric === "protein_g" ? goals.proteinG : weeklyMetric === "carbs_g" ? goals.carbsG : goals.fatG}
                   todayStr={todayStr}
                   onBarTap={(dateStr) => { setSelectedDate(dateStr); setView("daily"); }}
+                  metric={weeklyMetric}
                 />
               </div>
 
@@ -1287,14 +1479,18 @@ export default function App() {
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-around", marginBottom: "16px" }}>
                       {[
-                        { label: "Calories", value: Math.round(totals.calories / n), color: "#E8C872" },
-                        { label: "Protein", value: `${Math.round(totals.protein_g / n)}g`, color: "#7BE0AD" },
-                        { label: "Carbs", value: `${Math.round(totals.carbs_g / n)}g`, color: "#72B4E8" },
-                        { label: "Fat", value: `${Math.round(totals.fat_g / n)}g`, color: "#E87272" },
-                      ].map(({ label, value, color }) => (
-                        <div key={label} style={{ textAlign: "center" }}>
+                        { label: "Calories", value: Math.round(totals.calories / n), color: "#E8C872", metric: "calories" },
+                        { label: "Protein", value: `${Math.round(totals.protein_g / n)}g`, color: "#7BE0AD", metric: "protein_g" },
+                        { label: "Carbs", value: `${Math.round(totals.carbs_g / n)}g`, color: "#72B4E8", metric: "carbs_g" },
+                        { label: "Fat", value: `${Math.round(totals.fat_g / n)}g`, color: "#E87272", metric: "fat_g" },
+                      ].map(({ label, value, color, metric }) => (
+                        <div key={label} onClick={() => setWeeklyMetric(metric)} style={{
+                          textAlign: "center", cursor: "pointer", padding: "6px 8px", borderRadius: "8px",
+                          background: weeklyMetric === metric ? `${color}15` : "transparent",
+                          transition: "background 0.2s",
+                        }}>
                           <div style={{ fontSize: "18px", fontWeight: 700, color }}>{value}</div>
-                          <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.3)", textTransform: "uppercase" }}>{label}</div>
+                          <div style={{ fontSize: "9px", color: weeklyMetric === metric ? color : "rgba(255,255,255,0.3)", textTransform: "uppercase", fontWeight: weeklyMetric === metric ? 600 : 400 }}>{label}</div>
                         </div>
                       ))}
                     </div>
@@ -1379,6 +1575,42 @@ export default function App() {
               <MacroRing value={dailyTotals.fat_g} max={goals.fatG} color="#E87272" label="Fat" unit="g" />
             </div>
           </div>
+
+          {/* Remaining macros — only on today with meals logged */}
+          {isToday && dailyLog.length > 0 && (
+            <div style={{
+              display: "flex", justifyContent: "space-around", padding: "12px 20px",
+              borderBottom: "1px solid rgba(255,255,255,0.04)",
+            }}>
+              {[
+                { label: "Calories", remaining: goals.calories - dailyTotals.calories, goal: goals.calories, color: "#E8C872", unit: "" },
+                { label: "Protein", remaining: Math.round(goals.proteinG - dailyTotals.protein_g), goal: goals.proteinG, color: "#7BE0AD", unit: "g" },
+                { label: "Carbs", remaining: Math.round(goals.carbsG - dailyTotals.carbs_g), goal: goals.carbsG, color: "#72B4E8", unit: "g" },
+                { label: "Fat", remaining: Math.round(goals.fatG - dailyTotals.fat_g), goal: goals.fatG, color: "#E87272", unit: "g" },
+              ].map(({ label, remaining, goal, color, unit }) => {
+                const atGoal = goal > 0 && Math.abs(remaining) <= goal * 0.02;
+                const over = remaining < 0 && !atGoal;
+                return (
+                  <div key={label} style={{ textAlign: "center" }}>
+                    <div style={{
+                      fontSize: "15px", fontWeight: 700,
+                      color: atGoal ? color : over ? "rgba(232,114,114,0.7)" : color,
+                    }}>
+                      {atGoal ? "On target" : `${Math.abs(Math.round(remaining))}${unit}`}
+                    </div>
+                    {!atGoal && (
+                      <div style={{ fontSize: "10px", color: over ? "rgba(232,114,114,0.4)" : "rgba(255,255,255,0.3)" }}>
+                        {over ? "over" : "left"}
+                      </div>
+                    )}
+                    <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.25)", textTransform: "uppercase", marginTop: "2px" }}>
+                      {label}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Guest sign-up prompt */}
           {isGuest && dailyLog.length > 0 && (
