@@ -360,12 +360,14 @@ export default function App() {
   const [manualGrams, setManualGrams] = useState(100);
   const [expandedManualIndex, setExpandedManualIndex] = useState(null);
   const [extraItems, setExtraItems] = useState([]);
+  const [extraItemAdjustments, setExtraItemAdjustments] = useState([]);
   const [expandedExtraIndex, setExpandedExtraIndex] = useState(null);
   const [addingExtraItem, setAddingExtraItem] = useState(false);
   // Weekly view state
   const [weeklyData, setWeeklyData] = useState([]);
   const [weeklyLoading, setWeeklyLoading] = useState(false);
   const [weeklyMetric, setWeeklyMetric] = useState("calories");
+  const [deleteToast, setDeleteToast] = useState(null); // { mealIdOrIndex, timeoutId }
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const searchTimeoutRef = useRef(null);
@@ -389,6 +391,16 @@ export default function App() {
     const newStart = getWeekStartMonday(toLocalDateStr(date));
     if (newStart <= getWeekStartMonday(todayStr)) setWeekStart(newStart);
   };
+
+  // If navigating away from the daily view or changing date, finalize any pending delete
+  useEffect(() => {
+    if (deleteToast) {
+      clearTimeout(deleteToast.timeoutId);
+      executeDelete(deleteToast.mealIdOrIndex);
+      setDeleteToast(null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDate, view]);
 
   // Check for existing auth on mount (non-blocking — app shows immediately)
   useEffect(() => {
@@ -490,7 +502,7 @@ export default function App() {
     if (analysis) {
       setItemAdjustments(analysis.items.map(() => ({ multiplier: 1.0 })));
       setExpandedItemIndex(null);
-      setExtraItems([]);
+      setExtraItems([]); setExtraItemAdjustments([]);
       setAddingExtraItem(false);
       if (!mealDetailMode) setSelectedMealType(inferMealType());
     } else {
@@ -518,7 +530,20 @@ export default function App() {
         sugar_g: +((item.sugar_g ?? 0) * mult).toFixed(1),
       };
     });
-    const allItems = [...items, ...extraItems];
+    const adjustedExtras = extraItems.map((item, i) => {
+      const mult = extraItemAdjustments[i]?.multiplier ?? 1.0;
+      if (mult === 1.0) return item;
+      return {
+        ...item,
+        calories: Math.round(item.calories * mult),
+        protein_g: +((item.protein_g ?? 0) * mult).toFixed(1),
+        carbs_g: +((item.carbs_g ?? 0) * mult).toFixed(1),
+        fat_g: +((item.fat_g ?? 0) * mult).toFixed(1),
+        fiber_g: +((item.fiber_g ?? 0) * mult).toFixed(1),
+        sugar_g: +((item.sugar_g ?? 0) * mult).toFixed(1),
+      };
+    });
+    const allItems = [...items, ...adjustedExtras];
     const totals = allItems.reduce((acc, item) => ({
       calories: acc.calories + item.calories,
       protein_g: +(acc.protein_g + (item.protein_g ?? 0)).toFixed(1),
@@ -528,10 +553,16 @@ export default function App() {
       sugar_g: +(acc.sugar_g + (item.sugar_g ?? 0)).toFixed(1),
     }), { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0, sugar_g: 0 });
     return { adjustedItems: allItems, adjustedTotals: totals };
-  }, [analysis, itemAdjustments, extraItems]);
+  }, [analysis, itemAdjustments, extraItems, extraItemAdjustments]);
 
   const updateItemMultiplier = (index, newMultiplier) => {
     setItemAdjustments(prev => prev.map((adj, i) =>
+      i === index ? { ...adj, multiplier: Math.max(0.25, newMultiplier) } : adj
+    ));
+  };
+
+  const updateExtraItemMultiplier = (index, newMultiplier) => {
+    setExtraItemAdjustments(prev => prev.map((adj, i) =>
       i === index ? { ...adj, multiplier: Math.max(0.25, newMultiplier) } : adj
     ));
   };
@@ -608,7 +639,7 @@ export default function App() {
     setError(null);
     setScaledImageData(null);
     setMealDetailMode(false);
-    setExtraItems([]);
+    setExtraItems([]); setExtraItemAdjustments([]);
     setAddingExtraItem(false);
     setView("daily");
     // New meals are always "today" — navigate there and refresh
@@ -674,6 +705,7 @@ export default function App() {
       portion: `${manualGrams}g`,
       ...scaledFoodMacros,
     }]);
+    setExtraItemAdjustments(prev => [...prev, { multiplier: 1.0 }]);
     setSelectedFood(null);
     setManualQuery("");
     setManualResults([]);
@@ -682,6 +714,8 @@ export default function App() {
 
   const removeExtraItem = (index) => {
     setExtraItems(prev => prev.filter((_, i) => i !== index));
+    setExtraItemAdjustments(prev => prev.filter((_, i) => i !== index));
+    setExpandedExtraIndex(null);
   };
 
   const addManualToDaily = async () => {
@@ -720,13 +754,26 @@ export default function App() {
     setManualResults([]);
     setManualItems([]);
     setSelectedFood(null);
-    setExtraItems([]);
+    setExtraItems([]); setExtraItemAdjustments([]);
     setAddingExtraItem(false);
     setView("capture");
   };
 
-  const handleDeleteMeal = async (e, mealIdOrIndex) => {
+  const handleDeleteMeal = (e, mealIdOrIndex) => {
     e.stopPropagation();
+    // If there's already a pending delete, execute it immediately before starting a new one
+    if (deleteToast) {
+      clearTimeout(deleteToast.timeoutId);
+      executeDelete(deleteToast.mealIdOrIndex);
+    }
+    const timeoutId = setTimeout(() => {
+      executeDelete(mealIdOrIndex);
+      setDeleteToast(null);
+    }, 4000);
+    setDeleteToast({ mealIdOrIndex, timeoutId });
+  };
+
+  const executeDelete = async (mealIdOrIndex) => {
     if (user) {
       try {
         await deleteMeal(mealIdOrIndex);
@@ -737,6 +784,13 @@ export default function App() {
     } else {
       deleteGuestMeal(mealIdOrIndex);
       loadGuestData();
+    }
+  };
+
+  const undoDelete = () => {
+    if (deleteToast) {
+      clearTimeout(deleteToast.timeoutId);
+      setDeleteToast(null);
     }
   };
 
@@ -1024,19 +1078,22 @@ export default function App() {
                         />
                       );
                     })}
-                    {extraItems.map((item, i) => (
-                      <ItemRow
-                        key={`extra-${i}`}
-                        item={item}
-                        index={analysis.items.length + i}
-                        editable={!mealDetailMode}
-                        expanded={expandedExtraIndex === i}
-                        multiplier={1.0}
-                        onToggle={() => setExpandedExtraIndex(expandedExtraIndex === i ? null : i)}
-                        onMultiplierChange={null}
-                        onRemove={() => removeExtraItem(i)}
-                      />
-                    ))}
+                    {extraItems.map((item, i) => {
+                      const extraAdj = adjustedItems ? adjustedItems[analysis.items.length + i] : item;
+                      return (
+                        <ItemRow
+                          key={`extra-${i}`}
+                          item={extraAdj}
+                          index={analysis.items.length + i}
+                          editable={!mealDetailMode}
+                          expanded={expandedExtraIndex === i}
+                          multiplier={extraItemAdjustments[i]?.multiplier ?? 1.0}
+                          onToggle={() => setExpandedExtraIndex(expandedExtraIndex === i ? null : i)}
+                          onMultiplierChange={(val) => updateExtraItemMultiplier(i, val)}
+                          onRemove={() => removeExtraItem(i)}
+                        />
+                      );
+                    })}
                     {!mealDetailMode && (
                       <div style={{ padding: "12px 20px" }}>
                         {!addingExtraItem ? (
@@ -1648,6 +1705,9 @@ export default function App() {
                     {groupMeals.map((entry, i) => {
                       const totals = mealTotals(entry.items);
                       const time = new Date(entry.scannedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                      const mealKey = user ? entry.id : dailyLog.indexOf(entry);
+                      const isPendingDelete = deleteToast && deleteToast.mealIdOrIndex === mealKey;
+                      if (isPendingDelete) return null;
                       return (
                         <div key={entry.id || `${type}-${i}`} style={{
                           display: "flex", gap: "14px", padding: "14px 20px", alignItems: "center",
@@ -1708,6 +1768,24 @@ export default function App() {
               boxShadow: "0 4px 24px rgba(232,200,114,0.2)"
             }}>+ Scan Meal</button>
           </div>
+        </div>
+      )}
+
+      {/* Delete undo toast */}
+      {deleteToast && (
+        <div style={{
+          position: "fixed", bottom: "32px", left: "50%", transform: "translateX(-50%)",
+          background: "#1a1a1e", border: "1px solid rgba(255,255,255,0.1)",
+          borderRadius: "12px", padding: "12px 20px", display: "flex", alignItems: "center",
+          gap: "16px", zIndex: 200, boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+          animation: "fadeSlideIn 0.2s ease-out",
+        }}>
+          <span style={{ fontSize: "14px", color: "rgba(255,255,255,0.7)" }}>Meal deleted</span>
+          <button onClick={undoDelete} style={{
+            background: "none", border: "none", cursor: "pointer",
+            color: "#E8C872", fontSize: "14px", fontWeight: 700,
+            fontFamily: "'DM Sans',sans-serif", padding: "4px 8px",
+          }}>Undo</button>
         </div>
       )}
     </div>

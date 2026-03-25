@@ -27,6 +27,11 @@ macro-tracker/
 │       └── services/
 │           ├── ai.js     # Multi-provider AI dispatcher (Anthropic, Gemini, OpenAI, Ollama)
 │           └── nutrition.js  # USDA + Open Food Facts lookup with DB cache
+├── public/
+│   ├── manifest.json     # PWA manifest (app name, icons, theme)
+│   ├── icon.svg          # App icon (gold "M" on dark bg)
+│   ├── icon-maskable.svg # Maskable icon variant for adaptive icons
+│   └── sw.js             # Service worker (cache-first static, network-first nav)
 ├── index.html
 ├── vite.config.js        # Dev proxy: /api + /uploads → localhost:3001
 ├── Dockerfile            # Production build for Fly.io
@@ -46,6 +51,7 @@ macro-tracker/
 - **Nutrition data**: USDA FoodData Central API + Open Food Facts (cached in DB)
 - **Image storage**: Local disk (swap for Cloudflare R2 when scaling)
 - **Image optimization**: Client-side canvas downscaling to max 1024px before upload
+- **PWA**: Installable via manifest.json + service worker, standalone display, portrait orientation
 - **Hosting**: Split — frontend on GitHub Pages (julianreyes.dev/macro-tracker/) via GitHub Actions, backend on Fly.io (macro-tracker.fly.dev) via manual `fly deploy`
 
 ## Setup
@@ -137,7 +143,7 @@ Gemini is the default (free tier, no billing needed). Ollama requires a local in
 ## Current State
 
 ### What works
-- Frontend: guest mode (try before sign up), login/register screens (shown as overlay), camera/gallery capture, base64 encoding + client-side downscaling, AI analysis via backend API, results display with macro rings and item breakdown, persistent daily log (localStorage for guests, DB for authenticated), delete meals, goals-based MacroRing max values, guest data migration to DB on registration, logo click navigates to fresh scan, scan state resets after adding meal to log, date-based daily view with prev/next navigation (meals and totals filtered per day for both guest and authenticated modes), meal detail view (click any logged meal to see full macro breakdown, image, item list, and notes), guest meal images persisted as downscaled data URLs in localStorage, portion editing via per-item multiplier (tap item → ×0.25 step stepper, macro rings and totals update in real-time, adjusted values saved to log), manual food entry via text search (USDA/OFF lookup with per-100g scaling, debounced search, gram-based portion input), meal type labels (Breakfast/Lunch/Dinner/Snack) with time-based auto-selection and grouped daily log, weekly summary view with interactive SVG bar chart (metric switching between calories/protein/carbs/fat, week navigation, tap bar to jump to daily view), add extra items to scanned meals (inline USDA/OFF search in result view, combined with AI-analyzed items before saving), remaining macros display on daily view ("# MACRO Remaining" format, shown only on today when meals are logged), unified ItemRow component for all food items (AI-analyzed, search-added extras, manual entries) with consistent macro bars and removable via ✕ on expand
+- Frontend: guest mode (try before sign up), login/register screens (shown as overlay), camera/gallery capture, base64 encoding + client-side downscaling, AI analysis via backend API, results display with macro rings and item breakdown, persistent daily log (localStorage for guests, DB for authenticated), delete meals with undo toast (4-second window to undo before actual deletion), goals-based MacroRing max values, guest data migration to DB on registration, logo click navigates to fresh scan, scan state resets after adding meal to log, date-based daily view with prev/next navigation (meals and totals filtered per day for both guest and authenticated modes), meal detail view (click any logged meal to see full macro breakdown, image, item list, and notes), guest meal images persisted as downscaled data URLs in localStorage, portion editing via per-item multiplier (tap item → ×0.25 step stepper, macro rings and totals update in real-time, adjusted values saved to log), manual food entry via text search (USDA/OFF lookup with per-100g scaling, debounced search, gram-based portion input), meal type labels (Breakfast/Lunch/Dinner/Snack) with time-based auto-selection and grouped daily log, weekly summary view with interactive SVG bar chart (metric switching between calories/protein/carbs/fat, week navigation, tap bar to jump to daily view), add extra items to scanned meals (inline USDA/OFF search in result view, combined with AI-analyzed items before saving), remaining macros display on daily view ("# MACRO Remaining" format, shown only on today when meals are logged), unified ItemRow component for all food items (AI-analyzed, search-added extras, manual entries) with consistent macro bars and removable via ✕ on expand, PWA installable (manifest + service worker + Apple meta tags)
 - Backend: all routes working, SQLite via Prisma, AI multi-provider dispatcher, USDA + Open Food Facts lookup with DB caching (USDA searches Foundation + SR Legacy + FNDDS data types for broad coverage; OFF results filtered for English language, valid nutrition data, and rounded values), JWT auth (crashes if JWT_SECRET missing), rate limiting on analyze + scan + search endpoints, serves static React build in production, guest analyze endpoint (no auth), bulk import endpoint for guest data migration, sanitized error messages (generic errors to client, full details server-side only)
 - Deployment: Live — frontend auto-deploys to GitHub Pages on push, backend on Fly.io (manual `fly deploy`). Fly.io volume mounts /data for SQLite + uploads
 - Dev access: Vite configured with `host: true` for LAN access (phone testing via local IP)
@@ -228,6 +234,7 @@ When ready for more users:
 - Guest meal images are stored as data URLs in localStorage (~50-200KB each). localStorage has a ~5MB limit, so this works for ~25-100 guest meals before hitting the cap — fine for "try before sign up" usage
 - Frontend deploys automatically on push to main (GitHub Actions). Backend does NOT auto-deploy — run `fly deploy -a macro-tracker` manually for server changes
 - `VITE_API_URL` is baked into the frontend build at deploy time. Changing the backend URL requires re-running the GitHub Actions workflow
+- Service worker caches aggressively — when deploying breaking frontend changes, bump `CACHE_NAME` in `public/sw.js` (e.g., `macro-v1` → `macro-v2`) so old caches are purged on activate. Vite's hashed filenames help (new JS bundles get new URLs), but the SW itself and index.html are not hashed
 
 ## Planned Improvements
 - [x] Connect frontend to backend API
@@ -240,7 +247,7 @@ When ready for more users:
 - [x] Portion editing — per-item multiplier on scan results before saving
 - [x] Manual food entry — text search using USDA/OFF with per-100g portion scaling
 - [x] Meal type labels — Breakfast/Lunch/Dinner/Snack with grouped daily log
-- [ ] PWA manifest + service worker for installable mobile app
+- [x] PWA manifest + service worker for installable mobile app
 - [ ] Swap image storage to Cloudflare R2 when scaling
 - [x] Weekly summary view with interactive SVG bar chart and metric switching
 - [x] Add extra items to scanned meals via inline search
@@ -275,7 +282,7 @@ When ready for more users:
 15. **AI meal suggestions** — "I have 400 cal and 35g protein left today" → AI suggests meals that fit
 
 ### Tier 4 — Scale & polish
-16. **PWA + offline** — Service worker for installable mobile app, offline meal logging
+16. ~~**PWA + offline**~~ ✅ Installable via manifest.json + service worker. Cache-first for static assets, network-first for navigation. SVG icons (gold "M" on dark bg). Apple PWA meta tags for iOS. SW registered in main.jsx via `import.meta.env.BASE_URL`. Offline meal logging not yet supported (API calls still require network)
 17. **Push notifications** — Meal logging reminders
 18. **Portuguese language** — Important for Brazil market
 19. **Social / accountability** — Share streaks, compare with friends
@@ -288,9 +295,10 @@ When ready for more users:
 - New backend routes go in server/src/routes/ with their own Router
 - Keep AI provider logic in services/ai.js — add new providers there
 - API client centralizes all fetch calls, token management, 401 handling, and guest localStorage helpers in src/api.js
-- Scan flow: both guest and authenticated use `analyzeMeal()` (analyze only) → user edits portions → optionally add extra items via inline search (`extraItems` state, `addExtraItemToScan()`) → save. Authenticated saves via `saveMeal()` → `POST /api/meals`. Guest saves via `addGuestMeal()` to localStorage. `adjustedItems` useMemo combines scanned items (with multipliers) + extra items for totals and saving. AI items removable via `removeAnalysisItem()` (removes from both `analysis.items` and `itemAdjustments`)
+- Scan flow: both guest and authenticated use `analyzeMeal()` (analyze only) → user edits portions → optionally add extra items via inline search (`extraItems` state, `addExtraItemToScan()`) → save. Authenticated saves via `saveMeal()` → `POST /api/meals`. Guest saves via `addGuestMeal()` to localStorage. `adjustedItems` useMemo combines scanned items (with multipliers) + extra items (with multipliers) for totals and saving. AI items removable via `removeAnalysisItem()`, extra items via `removeExtraItem()`
+- Extra item multipliers: `extraItemAdjustments` state parallels `extraItems`, applied in `adjustedItems` useMemo. `updateExtraItemMultiplier()` updates, resets alongside `extraItems` in all cleanup paths
 - Manual entry flow: search foods via `searchNutrition()` (500ms debounced, errors keep previous results) → select food → adjust grams → macros scale via `per100g` data → add items → pick meal type → save with `provider: "manual"`. Manual items use `ItemRow` with MacroRing running totals
-- ItemRow component: unified display for all food items (AI-analyzed, extra search items, manual entries). Shows name, portion, calories, P/C/F macro bars. Tap to expand: AI items show ×multiplier controls + ✕ remove, extra/manual items show ✕ only (`onMultiplierChange={null}` hides −/+ controls)
+- ItemRow component: unified display for all food items (AI-analyzed, extra search items, manual entries). Shows name, portion, calories, P/C/F macro bars. Tap to expand: AI items and extra items show ×multiplier controls + ✕ remove, manual items show ✕ only (`onMultiplierChange={null}` hides −/+ controls)
 - Guest localStorage helpers: `getGuestMeals()`/`getGuestMealsByDate()`/`addGuestMeal()`/`deleteGuestMeal()`/`clearGuestMeals()`, `importMeals()` for DB migration
 - Date helpers: `toLocalDateStr()` for consistent YYYY-MM-DD in local timezone, `formatDisplayDate()` for user-facing date strings
 - Meal type helpers: `inferMealType()` auto-selects based on time of day (both frontend + backend), `groupMealsByType()` groups meals for daily log rendering in fixed order (breakfast → lunch → dinner → snack)
@@ -298,3 +306,5 @@ When ready for more users:
 - Weekly view: `WeeklyBarChart` pure SVG component with `METRIC_CONFIG` for metric switching, `loadWeeklyData` callback groups meals by date, `weeklyMetric` state controls which macro the chart displays
 - Remaining macros: inline computation in daily view JSX (goal - current), shown only when `isToday && dailyLog.length > 0`, three-row layout (number → macro label → "Remaining"/"Over"), labels and numbers use macro colors
 - MacroRing labels use their corresponding macro color (gold/green/blue/red), not dimmed white
+- Delete confirmation: `handleDeleteMeal()` shows a 4-second undo toast (`deleteToast` state) instead of deleting immediately. Meal row is hidden while pending. `executeDelete()` runs the actual API call / localStorage removal. `undoDelete()` clears the timeout and restores the row. Navigating away (date change, view change) finalizes the pending delete immediately via useEffect. If a second delete is triggered while one is pending, the first is finalized immediately
+- PWA: manifest.json + sw.js live in `public/` (copied to dist root by Vite). Service worker registered in main.jsx using `import.meta.env.BASE_URL + 'sw.js'`. Cache version bumped via `CACHE_NAME` in sw.js. Apple PWA meta tags in index.html for iOS standalone mode
