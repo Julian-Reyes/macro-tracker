@@ -16,8 +16,24 @@ model User {
 
   meals      Meal[]
   dailyGoals DailyGoals?
+  profile    UserProfile?
 
   @@map("users")
+}
+
+model UserProfile {
+  id            String @id @default(cuid())
+  userId        String @unique @map("user_id")
+  heightCm      Float  @map("height_cm")
+  weightKg      Float  @map("weight_kg")
+  age           Int
+  sex           String // male | female
+  activityLevel String @map("activity_level") // sedentary | light | moderate | active | very_active
+  goalType      String @map("goal_type")      // lose_weight | maintain | gain_muscle
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
 }
 
 model DailyGoals {

@@ -32,10 +32,8 @@ Or simpler — use swipe-to-delete instead of an always-visible button.
 
 ## P1 — Noticeable Friction
 
-### 3. Header nav buttons are too small
-**Location**: Header nav (`App.jsx:869-884`)
-**Issue**: `padding: "6px 14px"` with `fontSize: "12px"` yields ~28px tall buttons. The "Log out"/"Sign up" button is even smaller (`padding: "6px 12px"`, `fontSize: "11px"`). All are well under 44px.
-**Suggestion**: Increase padding to at least `"10px 14px"` and font to 13px. Or switch to an icon-based bottom tab bar (standard mobile pattern) which naturally gives 44px+ targets.
+### 3. ~~Header nav buttons are too small~~ ✅ FIXED
+**Resolution**: Replaced top nav tabs with a fixed bottom tab bar (`BottomTabBar` component). 4 tabs (Scan/Log/Stats/Goals) with inline SVG icons, `minHeight: "44px"` touch targets, gold active state. Header simplified to logo + auth button only. iOS safe area padding via `env(safe-area-inset-bottom)`.
 
 ### 4. MealTypePicker buttons too small
 **Location**: `MealTypePicker` (`App.jsx:105-121`)
@@ -72,10 +70,8 @@ Or simpler — use swipe-to-delete instead of an always-visible button.
 - Tertiary/hint text: raise to `rgba(255,255,255,0.5)` minimum (~4.9:1)
 - Decorative labels like section headers can stay dimmer if paired with readable content nearby
 
-### 9. "or type it in" link is tiny and hard to tap
-**Location**: Capture view (`App.jsx:927-931`)
-**Issue**: `padding: "4px"` with `fontSize: "13px"` — ~21px tall. The only path to manual entry is this easy-to-miss text button.
-**Suggestion**: Make it a proper secondary button: `padding: "12px 24px"`, or add a separate "Type it in" button alongside Camera/Gallery.
+### 9. ~~"or type it in" link is tiny and hard to tap~~ ✅ FIXED
+**Resolution**: Increased padding from `4px` to `12px 24px` with `minHeight: "44px"`. Bumped color from `rgba(255,255,255,0.4)` to `0.45` for better contrast.
 
 ### 10. "Today"/"This Week" quick-jump button too small
 **Location**: Daily (`App.jsx:1571-1577`) and weekly (`App.jsx:1442-1448`) nav
@@ -109,10 +105,8 @@ Or simpler — use swipe-to-delete instead of an always-visible button.
 **Issue**: `background: "rgba(232,200,114,0.1)"` — this is the most important CTA for new users but looks like a tertiary action. The main "Scan Meal" FAB at the bottom (`App.jsx:1730`) uses the bold gold gradient.
 **Suggestion**: Use the same gradient treatment: `background: "linear-gradient(135deg, #E8C872, #D4A843)"`, `color: "#0C0C0E"`.
 
-### 15. Missing confirmation for meal deletion
-**Location**: `handleDeleteMeal` (`App.jsx:751-764`)
-**Issue**: Tapping the ✕ button immediately deletes the meal with no undo or confirmation. On a touchscreen where mis-taps happen, this is destructive.
-**Suggestion**: Either add a `window.confirm("Delete this meal?")` or (better) show a brief toast with "Undo" for 5 seconds before finalizing the delete.
+### 15. ~~Missing confirmation for meal deletion~~ ✅ FIXED
+**Resolution**: Implemented 4-second undo toast. `handleDeleteMeal()` shows a "Meal deleted" toast with "Undo" button instead of deleting immediately. Pending delete finalized on timeout, navigation, or second delete. Toast repositioned above bottom tab bar via `calc(80px + env(safe-area-inset-bottom))`.
 
 ### 16. Loading state lacks skeleton structure
 **Location**: Analysis loading (`App.jsx:972-983`), weekly loading (`App.jsx:1451-1459`)
@@ -132,14 +126,8 @@ Or simpler — use swipe-to-delete instead of an always-visible button.
 [data-meal-row]:active { background: rgba(255,255,255,0.04); }
 ```
 
-### 19. Bottom "Scan Meal" button scrolls off-screen
-**Location**: Daily log bottom CTA (`App.jsx:1729-1736`)
-**Issue**: The primary action button is at the bottom of the scrolling content. With many meals logged, users must scroll all the way down to find it. The header "Scan" nav button is the only always-visible option, but it's tiny (finding #3).
-**Suggestion**: Make it a fixed-position floating action button:
-```js
-position: "fixed", bottom: "24px", left: "50%", transform: "translateX(-50%)",
-zIndex: 10,
-```
+### 19. ~~Bottom "Scan Meal" button scrolls off-screen~~ ✅ FIXED
+**Resolution**: The bottom tab bar is now always visible with a "Scan" tab, providing persistent access to the scan flow. The inline "+ Scan Meal" button at the bottom of the log remains as a contextual secondary action.
 
 ### 20. Auth overlay close button positioning
 **Location**: Auth overlay (`App.jsx:833-838`)
@@ -150,11 +138,11 @@ zIndex: 10,
 
 ## Summary by Priority
 
-| Priority | Count | Key Theme |
-|----------|-------|-----------|
-| **P0** | 2 | Delete button too small; no reduced-motion support |
-| **P1** | 8 | Most interactive elements under 44px; text contrast failures throughout |
-| **P2** | 10 | Inconsistencies, missing feedback states, layout polish |
+| Priority | Count | Fixed | Key Theme |
+|----------|-------|-------|-----------|
+| **P0** | 2 | 0 | Delete button too small; no reduced-motion support |
+| **P1** | 8 | 2 | Most interactive elements under 44px; text contrast failures throughout. Fixed: header nav → bottom tab bar (#3), "or type it in" tap target (#9) |
+| **P2** | 10 | 3 | Inconsistencies, missing feedback states, layout polish. Fixed: delete undo toast (#15), scan always accessible via tab bar (#19) |
 
 ## Biggest Wins for Least Effort
 

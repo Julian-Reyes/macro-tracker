@@ -8,8 +8,9 @@ AI-powered food macro tracker. User takes a photo of food/drink → AI analyzes 
 ```
 macro-tracker/
 ├── src/                  # React frontend (Vite)
-│   ├── App.jsx           # Main app (auth flow, scan, daily log)
+│   ├── App.jsx           # Main app (auth flow, scan, daily log, bottom tab bar)
 │   ├── AuthScreen.jsx    # Login/register UI
+│   ├── GoalsScreen.jsx   # Profile form + auto-calculated macro goals
 │   ├── api.js            # API client, token mgmt, image downscaling
 │   └── main.jsx          # React entry
 ├── server/               # Express backend
@@ -23,9 +24,10 @@ macro-tracker/
 │       │   ├── auth.js   # POST /register, /login, GET /me
 │       │   ├── meals.js  # POST /, POST /scan, POST /import, GET /, GET /history/range, GET /:id, DELETE /:id
 │       │   ├── nutrition.js  # GET /search (no auth), GET /lookup (auth)
-│       │   └── goals.js  # GET /, PUT /
+│       │   └── goals.js  # GET /, PUT /, GET /profile, PUT /profile
 │       └── services/
 │           ├── ai.js     # Multi-provider AI dispatcher (Anthropic, Gemini, OpenAI, Ollama)
+│           ├── goals.js  # Mifflin-St Jeor BMR/TDEE calculator + macro splits
 │           └── nutrition.js  # USDA + Open Food Facts lookup with DB cache
 ├── public/
 │   ├── manifest.json     # PWA manifest (app name, icons, theme)
@@ -123,6 +125,8 @@ All authenticated routes require `Authorization: Bearer <token>` header. Guest e
 ### Goals
 - `GET /api/goals` — current daily macro goals
 - `PUT /api/goals` — `{ calories, protein_g, carbs_g, fat_g }`
+- `GET /api/goals/profile` — user's body profile (height, weight, age, sex, activity, goal)
+- `PUT /api/goals/profile` — save profile + auto-calculate and save macro goals `{ heightCm, weightKg, age, sex, activityLevel, goalType }` → `{ profile, goals }`
 
 ## AI Provider System
 The `services/ai.js` dispatches to the configured provider. Set `AI_PROVIDER` in .env or pass `provider` in the scan request body. Each provider has its own request format but returns the same JSON schema.
@@ -138,19 +142,19 @@ Gemini is the default (free tier, no billing needed). Ollama requires a local in
 - **Carbs blue**: #72B4E8
 - **Fat red**: #E87272
 - **Typography**: Instrument Serif for logo, DM Sans for everything else
-- **Layout**: Max-width 480px, mobile-first
+- **Layout**: Max-width 480px, mobile-first, fixed bottom tab bar navigation
+- **Navigation**: Bottom tab bar with 4 tabs (Scan, Log, Stats, Goals) — inline SVG icons, gold active state, iOS safe area padding
 
 ## Current State
 
 ### What works
-- Frontend: guest mode (try before sign up), login/register screens (shown as overlay), camera/gallery capture, base64 encoding + client-side downscaling, AI analysis via backend API, results display with macro rings and item breakdown, persistent daily log (localStorage for guests, DB for authenticated), delete meals with undo toast (4-second window to undo before actual deletion), goals-based MacroRing max values, guest data migration to DB on registration, logo click navigates to fresh scan, scan state resets after adding meal to log, date-based daily view with prev/next navigation (meals and totals filtered per day for both guest and authenticated modes), meal detail view (click any logged meal to see full macro breakdown, image, item list, and notes), guest meal images persisted as downscaled data URLs in localStorage, portion editing via per-item multiplier (tap item → ×0.25 step stepper, macro rings and totals update in real-time, adjusted values saved to log), manual food entry via text search (USDA/OFF lookup with per-100g scaling, debounced search, gram-based portion input), meal type labels (Breakfast/Lunch/Dinner/Snack) with time-based auto-selection and grouped daily log, weekly summary view with interactive SVG bar chart (metric switching between calories/protein/carbs/fat, week navigation, tap bar to jump to daily view), add extra items to scanned meals (inline USDA/OFF search in result view, combined with AI-analyzed items before saving), remaining macros display on daily view ("# MACRO Remaining" format, shown only on today when meals are logged), unified ItemRow component for all food items (AI-analyzed, search-added extras, manual entries) with consistent macro bars and removable via ✕ on expand, PWA installable (manifest + service worker + Apple meta tags)
+- Frontend: guest mode (try before sign up), login/register screens (shown as overlay), camera/gallery capture, base64 encoding + client-side downscaling, AI analysis via backend API, results display with macro rings and item breakdown, persistent daily log (localStorage for guests, DB for authenticated), delete meals with undo toast (4-second window to undo before actual deletion), goals-based MacroRing max values, guest data migration to DB on registration, logo click navigates to fresh scan, scan state resets after adding meal to log, date-based daily view with prev/next navigation (meals and totals filtered per day for both guest and authenticated modes), meal detail view (click any logged meal to see full macro breakdown, image, item list, and notes), guest meal images persisted as downscaled data URLs in localStorage, portion editing via per-item multiplier (tap item → ×0.25 step stepper, macro rings and totals update in real-time, adjusted values saved to log), manual food entry via text search (USDA/OFF lookup with per-100g scaling, debounced search, gram-based portion input), meal type labels (Breakfast/Lunch/Dinner/Snack) with time-based auto-selection and grouped daily log, weekly summary view with interactive SVG bar chart (metric switching between calories/protein/carbs/fat, week navigation, tap bar to jump to daily view), add extra items to scanned meals (inline USDA/OFF search in result view, combined with AI-analyzed items before saving), remaining macros display on daily view ("# MACRO Remaining" format, shown only on today when meals are logged), unified ItemRow component for all food items (AI-analyzed, search-added extras, manual entries) with consistent macro bars and removable via ✕ on expand, PWA installable (manifest + service worker + Apple meta tags), goals editing UI (profile-based auto-calculation: height/weight/age/sex/activity/goal → Mifflin-St Jeor BMR → TDEE → macro split, with imperial/metric toggle and live preview), bottom tab bar navigation (Scan/Log/Stats/Goals with SVG icons, iOS safe area support, hidden during sub-views)
 - Backend: all routes working, SQLite via Prisma, AI multi-provider dispatcher, USDA + Open Food Facts lookup with DB caching (USDA searches Foundation + SR Legacy + FNDDS data types for broad coverage; OFF results filtered for English language, valid nutrition data, and rounded values), JWT auth (crashes if JWT_SECRET missing), rate limiting on analyze + scan + search endpoints, serves static React build in production, guest analyze endpoint (no auth), bulk import endpoint for guest data migration, sanitized error messages (generic errors to client, full details server-side only)
 - Deployment: Live — frontend auto-deploys to GitHub Pages on push, backend on Fly.io (manual `fly deploy`). Fly.io volume mounts /data for SQLite + uploads
 - Dev access: Vite configured with `host: true` for LAN access (phone testing via local IP)
 
 ### What could be improved
 - The nutrition lookup service could be used to cross-reference AI estimates against USDA data for improved accuracy
-- No goals editing UI — PUT /api/goals endpoint exists but no frontend for it yet
 
 ## AI Response Schema
 Every provider must return this exact JSON (enforced by system prompt):
@@ -205,7 +209,8 @@ When ready for more users:
 - **Registration**: AuthScreen shown as overlay → on success, `importMeals()` sends localStorage meals to DB → `clearGuestMeals()` → app switches to authenticated mode
 - **Authenticated scans**: `POST /api/meals/analyze` (analyze only) → user edits portions → `POST /api/meals` (save with adjusted values + image)
 - **Authenticated daily log**: Reads from `GET /api/meals?date=...`
-- **Sign-up prompt**: Banner shown in daily log for guests with meals
+- **Login prompt**: Banner shown in daily log for guests with meals
+- **Guest Goals preview**: Guests can tap the Goals tab to see a greyed-out/blurred preview of the GoalsScreen with an overlay prompting login. "Login / Sign Up" button opens the auth overlay
 
 ## Security
 - **JWT_SECRET**: Required env var — server crashes on startup if not set. Use a random 32-byte hex string in production (`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`)
@@ -254,7 +259,7 @@ When ready for more users:
 - [x] Remaining macros display on daily view
 - [ ] Portuguese language support
 - [ ] Model switcher UI (dropdown in settings to pick AI provider)
-- [ ] Goals editing UI
+- [x] Goals editing UI — profile-based auto-calculation with Mifflin-St Jeor formula
 - [ ] Enhance accuracy: use AI for food identification + USDA for verified macros
 - [ ] Auto-deploy backend to Fly.io via GitHub Actions (currently manual `fly deploy`)
 
@@ -263,7 +268,7 @@ When ready for more users:
 ### Tier 1 — High impact, moderate effort
 1. ~~**Manual food entry / text search**~~ ✅ Users can type food names, search USDA/OFF, adjust grams, add multiple items, pick meal type, and save. Uses `searchNutritionMultiple()` with per-100g scaling
 2. ~~**Meal type labels**~~ ✅ Meals categorized as Breakfast/Lunch/Dinner/Snack. `mealType` field on Meal model, auto-inferred from time of day, grouped rendering in daily log with per-group subtotals
-3. **Goals editing UI** — The `PUT /api/goals` endpoint exists, just needs a settings screen with sliders/inputs for calorie and macro targets
+3. ~~**Goals editing UI**~~ ✅ Profile-based auto-calculation: user enters height/weight/age/sex/activity level/goal type → Mifflin-St Jeor BMR → TDEE → macro split. Imperial/metric toggle, live preview of calculated targets. `UserProfile` model stores inputs, `services/goals.js` handles calculation, `GoalsScreen.jsx` is the UI. Accessible via "Goals" tab in bottom nav bar (auth-only; guests see sign-up prompt)
 4. ~~**Weekly summary view**~~ ✅ Interactive SVG bar chart with metric switching (calories/protein/carbs/fat), week navigation, daily averages and totals, tap bar to jump to daily view. Uses existing `/history/range` endpoint
 5. **Favorite/recent meals** — Quick re-log common meals without re-scanning. Save templates from previous scans
 
@@ -289,7 +294,7 @@ When ready for more users:
 20. **Multi-language AI prompts** — AI recognizes Brazilian dishes natively
 
 ## Conventions
-- Frontend: inline React styles, split into components when complexity demands it (App.jsx, AuthScreen.jsx, api.js)
+- Frontend: inline React styles, split into components when complexity demands it (App.jsx, AuthScreen.jsx, GoalsScreen.jsx, api.js)
 - Backend: ES modules, flat service layer, Prisma for all DB access
 - Animations: CSS @keyframes in a <style> tag inside root component
 - New backend routes go in server/src/routes/ with their own Router
@@ -307,4 +312,6 @@ When ready for more users:
 - Remaining macros: inline computation in daily view JSX (goal - current), shown only when `isToday && dailyLog.length > 0`, three-row layout (number → macro label → "Remaining"/"Over"), labels and numbers use macro colors
 - MacroRing labels use their corresponding macro color (gold/green/blue/red), not dimmed white
 - Delete confirmation: `handleDeleteMeal()` shows a 4-second undo toast (`deleteToast` state) instead of deleting immediately. Meal row is hidden while pending. `executeDelete()` runs the actual API call / localStorage removal. `undoDelete()` clears the timeout and restores the row. Navigating away (date change, view change) finalizes the pending delete immediately via useEffect. If a second delete is triggered while one is pending, the first is finalized immediately
-- PWA: manifest.json + sw.js live in `public/` (copied to dist root by Vite). Service worker registered in main.jsx using `import.meta.env.BASE_URL + 'sw.js'`. Cache version bumped via `CACHE_NAME` in sw.js. Apple PWA meta tags in index.html for iOS standalone mode
+- PWA: manifest.json + sw.js live in `public/` (copied to dist root by Vite). Service worker registered in main.jsx using `import.meta.env.BASE_URL + 'sw.js'`. Cache version bumped via `CACHE_NAME` in sw.js. Apple PWA meta tags in index.html for iOS standalone mode. `viewport-fit=cover` enables `env(safe-area-inset-bottom)` for home indicator padding
+- Navigation: `BottomTabBar` component with 4 tabs (Scan/Log/Stats/Goals) using inline SVG icons. Fixed to bottom with `env(safe-area-inset-bottom)` padding. Active tab: gold `#E8C872`, inactive: `rgba(255,255,255,0.45)`. Hidden during `result` and `manual` sub-views. Tab bar renders conditionally in App.jsx based on `view` state. Guest tapping Goals shows greyed-out preview with login prompt overlay. Header simplified to logo + "Login" button (guests) / "Log out" button (authenticated)
+- Goals: `GoalsScreen.jsx` with profile form (sex, age, height, weight, activity level, goal type). Client-side `calcMacros()` mirrors `services/goals.js` for live preview. Imperial/metric toggle with bidirectional conversion. `saveProfile()` → `PUT /api/goals/profile` persists profile + auto-calculates goals server-side. `UserProfile` Prisma model stores body data separately from `DailyGoals`

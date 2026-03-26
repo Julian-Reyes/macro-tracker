@@ -159,6 +159,17 @@ export async function getGoals() {
   return apiFetch('/goals');
 }
 
+export async function getProfile() {
+  return apiFetch('/goals/profile');
+}
+
+export async function saveProfile(profileData) {
+  return apiFetch('/goals/profile', {
+    method: 'PUT',
+    body: JSON.stringify(profileData),
+  });
+}
+
 // --- Image downscaling ---
 export function downscaleImage(base64, mediaType, maxDim = 1024) {
   return new Promise((resolve) => {

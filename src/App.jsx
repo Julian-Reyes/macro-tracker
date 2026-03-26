@@ -1,8 +1,21 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import AuthScreen from "./AuthScreen";
+import GoalsScreen from "./GoalsScreen";
 import {
-  getToken, clearToken, getMe, saveMeal, getMeals, getMealsRange, deleteMeal, getGoals,
-  downscaleImage, analyzeMeal, getGuestMeals, getGuestMealsByDate, addGuestMeal, deleteGuestMeal,
+  getToken,
+  clearToken,
+  getMe,
+  saveMeal,
+  getMeals,
+  getMealsRange,
+  deleteMeal,
+  getGoals,
+  downscaleImage,
+  analyzeMeal,
+  getGuestMeals,
+  getGuestMealsByDate,
+  addGuestMeal,
+  deleteGuestMeal,
   searchNutrition,
 } from "./api";
 
@@ -21,38 +34,48 @@ function normalizeItem(item) {
 }
 
 function mealTotals(items) {
-  return items.reduce((acc, it) => {
-    const n = normalizeItem(it);
-    acc.calories += n.calories;
-    acc.protein_g += n.protein_g;
-    acc.carbs_g += n.carbs_g;
-    acc.fat_g += n.fat_g;
-    return acc;
-  }, { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 });
+  return items.reduce(
+    (acc, it) => {
+      const n = normalizeItem(it);
+      acc.calories += n.calories;
+      acc.protein_g += n.protein_g;
+      acc.carbs_g += n.carbs_g;
+      acc.fat_g += n.fat_g;
+      return acc;
+    },
+    { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+  );
 }
 
 function computeDailyTotals(meals) {
-  return meals.reduce((acc, m) => {
-    const t = mealTotals(m.items);
-    acc.calories += t.calories;
-    acc.protein_g += t.protein_g;
-    acc.carbs_g += t.carbs_g;
-    acc.fat_g += t.fat_g;
-    return acc;
-  }, { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0, sugar_g: 0 });
+  return meals.reduce(
+    (acc, m) => {
+      const t = mealTotals(m.items);
+      acc.calories += t.calories;
+      acc.protein_g += t.protein_g;
+      acc.carbs_g += t.carbs_g;
+      acc.fat_g += t.fat_g;
+      return acc;
+    },
+    { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0, sugar_g: 0 },
+  );
 }
 
 function toLocalDateStr(date = new Date()) {
   const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 }
 
 function formatDisplayDate(dateStr) {
-  const [y, m, d] = dateStr.split('-').map(Number);
+  const [y, m, d] = dateStr.split("-").map(Number);
   const date = new Date(y, m - 1, d);
-  return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  return date.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 function inferMealType(date = new Date()) {
@@ -64,7 +87,7 @@ function inferMealType(date = new Date()) {
 }
 
 function getWeekStartMonday(dateStr) {
-  const [y, m, d] = dateStr.split('-').map(Number);
+  const [y, m, d] = dateStr.split("-").map(Number);
   const date = new Date(y, m - 1, d);
   const day = date.getDay();
   const diff = day === 0 ? 6 : day - 1;
@@ -73,8 +96,8 @@ function getWeekStartMonday(dateStr) {
 }
 
 function getWeekDays(weekStartStr) {
-  const [y, m, d] = weekStartStr.split('-').map(Number);
-  const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const [y, m, d] = weekStartStr.split("-").map(Number);
+  const labels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   return labels.map((label, i) => {
     const date = new Date(y, m - 1, d + i);
     return { date: toLocalDateStr(date), dayLabel: label };
@@ -82,37 +105,68 @@ function getWeekDays(weekStartStr) {
 }
 
 function formatWeekRange(weekStartStr) {
-  const [y, m, d] = weekStartStr.split('-').map(Number);
+  const [y, m, d] = weekStartStr.split("-").map(Number);
   const start = new Date(y, m - 1, d);
   const end = new Date(y, m - 1, d + 6);
-  const fmt = (dt) => dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const fmt = (dt) =>
+    dt.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   return `${fmt(start)} – ${fmt(end)}`;
 }
 
 const MEAL_TYPE_ORDER = ["breakfast", "lunch", "dinner", "snack"];
-const MEAL_TYPE_LABELS = { breakfast: "Breakfast", lunch: "Lunch", dinner: "Dinner", snack: "Snack" };
+const MEAL_TYPE_LABELS = {
+  breakfast: "Breakfast",
+  lunch: "Lunch",
+  dinner: "Dinner",
+  snack: "Snack",
+};
 
 function groupMealsByType(meals) {
   const groups = {};
   for (const meal of meals) {
-    const type = meal.mealType || meal.meal_type || inferMealType(new Date(meal.scannedAt));
+    const type =
+      meal.mealType ||
+      meal.meal_type ||
+      inferMealType(new Date(meal.scannedAt));
     if (!groups[type]) groups[type] = [];
     groups[type].push(meal);
   }
-  return MEAL_TYPE_ORDER.filter(t => groups[t]).map(t => ({ type: t, meals: groups[t] }));
+  return MEAL_TYPE_ORDER.filter((t) => groups[t]).map((t) => ({
+    type: t,
+    meals: groups[t],
+  }));
 }
 
 function MealTypePicker({ value, onChange }) {
   return (
-    <div style={{ display: "flex", gap: "8px", justifyContent: "center", padding: "12px 20px" }}>
-      {MEAL_TYPE_ORDER.map(type => (
-        <button key={type} onClick={() => onChange(type)} style={{
-          padding: "6px 14px", borderRadius: "20px", border: "none", cursor: "pointer",
-          fontSize: "12px", fontWeight: 600, fontFamily: "'DM Sans',sans-serif",
-          background: value === type ? "rgba(232,200,114,0.15)" : "rgba(255,255,255,0.04)",
-          color: value === type ? "#E8C872" : "rgba(255,255,255,0.3)",
-          transition: "all 0.2s",
-        }}>
+    <div
+      style={{
+        display: "flex",
+        gap: "8px",
+        justifyContent: "center",
+        padding: "12px 20px",
+      }}
+    >
+      {MEAL_TYPE_ORDER.map((type) => (
+        <button
+          key={type}
+          onClick={() => onChange(type)}
+          style={{
+            padding: "6px 14px",
+            borderRadius: "20px",
+            border: "none",
+            cursor: "pointer",
+            fontSize: "12px",
+            fontWeight: 600,
+            fontFamily: "'DM Sans',sans-serif",
+            background:
+              value === type
+                ? "rgba(232,200,114,0.15)"
+                : "rgba(255,255,255,0.04)",
+            color: value === type ? "#E8C872" : "rgba(255,255,255,0.3)",
+            transition: "all 0.2s",
+          }}
+        >
           {MEAL_TYPE_LABELS[type]}
         </button>
       ))}
@@ -121,18 +175,52 @@ function MealTypePicker({ value, onChange }) {
 }
 
 const METRIC_CONFIG = {
-  calories: { key: "calories", color: "#E8C872", colorDark: "#D4A843", unit: "", label: "Calories" },
-  protein_g: { key: "protein_g", color: "#7BE0AD", colorDark: "#4CB97A", unit: "g", label: "Protein" },
-  carbs_g: { key: "carbs_g", color: "#72B4E8", colorDark: "#4A8FC0", unit: "g", label: "Carbs" },
-  fat_g: { key: "fat_g", color: "#E87272", colorDark: "#C05050", unit: "g", label: "Fat" },
+  calories: {
+    key: "calories",
+    color: "#E8C872",
+    colorDark: "#D4A843",
+    unit: "",
+    label: "Calories",
+  },
+  protein_g: {
+    key: "protein_g",
+    color: "#7BE0AD",
+    colorDark: "#4CB97A",
+    unit: "g",
+    label: "Protein",
+  },
+  carbs_g: {
+    key: "carbs_g",
+    color: "#72B4E8",
+    colorDark: "#4A8FC0",
+    unit: "g",
+    label: "Carbs",
+  },
+  fat_g: {
+    key: "fat_g",
+    color: "#E87272",
+    colorDark: "#C05050",
+    unit: "g",
+    label: "Fat",
+  },
 };
 
-function WeeklyBarChart({ data, goal, todayStr, onBarTap, metric = "calories" }) {
+function WeeklyBarChart({
+  data,
+  goal,
+  todayStr,
+  onBarTap,
+  metric = "calories",
+}) {
   const cfg = METRIC_CONFIG[metric] || METRIC_CONFIG.calories;
-  const chartH = 170, chartTop = 15, chartLeft = 10, chartRight = 430;
+  const chartH = 170,
+    chartTop = 15,
+    chartLeft = 10,
+    chartRight = 430;
   const chartW = chartRight - chartLeft;
-  const barW = 40, gap = (chartW - barW * 7) / 6;
-  const values = data.map(d => d[cfg.key] || 0);
+  const barW = 40,
+    gap = (chartW - barW * 7) / 6;
+  const values = data.map((d) => d[cfg.key] || 0);
   const maxVal = Math.max(goal || 0, ...values);
   const scaleMax = maxVal * 1.15 || 1;
   const hasGoal = goal > 0;
@@ -149,10 +237,27 @@ function WeeklyBarChart({ data, goal, todayStr, onBarTap, metric = "calories" })
       {/* Goal line */}
       {hasGoal && (
         <>
-          <line x1={chartLeft} y1={goalY} x2={chartRight} y2={goalY}
-            stroke={cfg.color} strokeWidth="1" strokeDasharray="6 4" opacity={0.3} />
-          <text x={chartRight + 4} y={goalY + 3} fill={cfg.color} fontSize="9"
-            fontFamily="'DM Sans',sans-serif" opacity={0.4}>{goal}{cfg.unit}</text>
+          <line
+            x1={chartLeft}
+            y1={goalY}
+            x2={chartRight}
+            y2={goalY}
+            stroke={cfg.color}
+            strokeWidth="1"
+            strokeDasharray="6 4"
+            opacity={0.3}
+          />
+          <text
+            x={chartRight + 4}
+            y={goalY + 3}
+            fill={cfg.color}
+            fontSize="9"
+            fontFamily="'DM Sans',sans-serif"
+            opacity={0.4}
+          >
+            {goal}
+            {cfg.unit}
+          </text>
         </>
       )}
       {/* Bars */}
@@ -164,20 +269,50 @@ function WeeklyBarChart({ data, goal, todayStr, onBarTap, metric = "calories" })
         const h = val > 0 ? Math.max((val / scaleMax) * chartH, 4) : 3;
         const y = chartTop + chartH - h;
         return (
-          <g key={day.date} onClick={() => !isFuture && onBarTap(day.date)} style={{ cursor: isFuture ? "default" : "pointer" }}>
-            <rect x={x} y={y} width={barW} height={h} rx={3}
-              fill={isFuture ? "rgba(255,255,255,0.04)" : val > 0 ? "url(#barGrad)" : "rgba(255,255,255,0.06)"}
-              stroke={isToday ? cfg.color : "none"} strokeWidth={isToday ? 1.5 : 0}
+          <g
+            key={day.date}
+            onClick={() => !isFuture && onBarTap(day.date)}
+            style={{ cursor: isFuture ? "default" : "pointer" }}
+          >
+            <rect
+              x={x}
+              y={y}
+              width={barW}
+              height={h}
+              rx={3}
+              fill={
+                isFuture
+                  ? "rgba(255,255,255,0.04)"
+                  : val > 0
+                    ? "url(#barGrad)"
+                    : "rgba(255,255,255,0.06)"
+              }
+              stroke={isToday ? cfg.color : "none"}
+              strokeWidth={isToday ? 1.5 : 0}
               opacity={isFuture ? 0.3 : 1}
             />
-            <text x={x + barW / 2} y={y - 5} textAnchor="middle"
-              fill={isFuture ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.6)"}
-              fontSize="10" fontWeight="600" fontFamily="'DM Sans',sans-serif">
+            <text
+              x={x + barW / 2}
+              y={y - 5}
+              textAnchor="middle"
+              fill={
+                isFuture ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.6)"
+              }
+              fontSize="10"
+              fontWeight="600"
+              fontFamily="'DM Sans',sans-serif"
+            >
               {isFuture ? "–" : val > 0 ? `${val}${cfg.unit}` : "–"}
             </text>
-            <text x={x + barW / 2} y={chartTop + chartH + 18} textAnchor="middle"
+            <text
+              x={x + barW / 2}
+              y={chartTop + chartH + 18}
+              textAnchor="middle"
               fill={isToday ? cfg.color : "rgba(255,255,255,0.35)"}
-              fontSize="11" fontWeight={isToday ? 600 : 400} fontFamily="'DM Sans',sans-serif">
+              fontSize="11"
+              fontWeight={isToday ? 600 : 400}
+              fontFamily="'DM Sans',sans-serif"
+            >
               {day.dayLabel}
             </text>
           </g>
@@ -194,58 +329,146 @@ function MacroRing({ value, max, color, label, unit }) {
   const dashOffset = circumference * (1 - progress);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: "4px",
+      }}
+    >
       <svg width="72" height="72" viewBox="0 0 72 72">
-        <circle cx="36" cy="36" r={radius} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="5" />
         <circle
-          cx="36" cy="36" r={radius} fill="none"
-          stroke={color} strokeWidth="5" strokeLinecap="round"
-          strokeDasharray={circumference} strokeDashoffset={dashOffset}
-          transform="rotate(-90 36 36)"
-          style={{ transition: "stroke-dashoffset 0.8s cubic-bezier(0.4,0,0.2,1)" }}
+          cx="36"
+          cy="36"
+          r={radius}
+          fill="none"
+          stroke="rgba(255,255,255,0.06)"
+          strokeWidth="5"
         />
-        <text x="36" y="33" textAnchor="middle" fill="#fff" fontSize="14" fontWeight="700" fontFamily="'DM Sans',sans-serif">
+        <circle
+          cx="36"
+          cy="36"
+          r={radius}
+          fill="none"
+          stroke={color}
+          strokeWidth="5"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={dashOffset}
+          transform="rotate(-90 36 36)"
+          style={{
+            transition: "stroke-dashoffset 0.8s cubic-bezier(0.4,0,0.2,1)",
+          }}
+        />
+        <text
+          x="36"
+          y="33"
+          textAnchor="middle"
+          fill="#fff"
+          fontSize="14"
+          fontWeight="700"
+          fontFamily="'DM Sans',sans-serif"
+        >
           {Math.round(value)}
         </text>
-        <text x="36" y="45" textAnchor="middle" fill="rgba(255,255,255,0.45)" fontSize="9" fontFamily="'DM Sans',sans-serif">
+        <text
+          x="36"
+          y="45"
+          textAnchor="middle"
+          fill="rgba(255,255,255,0.45)"
+          fontSize="9"
+          fontFamily="'DM Sans',sans-serif"
+        >
           {unit}
         </text>
       </svg>
-      <span style={{ fontSize: "11px", color, fontWeight: 500, letterSpacing: "0.5px", textTransform: "uppercase" }}>
+      <span
+        style={{
+          fontSize: "11px",
+          color,
+          fontWeight: 500,
+          letterSpacing: "0.5px",
+          textTransform: "uppercase",
+        }}
+      >
         {label}
       </span>
     </div>
   );
 }
 
-function ItemRow({ item, index, expanded, multiplier, editable, onToggle, onMultiplierChange, onRemove }) {
+function ItemRow({
+  item,
+  index,
+  expanded,
+  multiplier,
+  editable,
+  onToggle,
+  onMultiplierChange,
+  onRemove,
+}) {
   const macroBar = (val, max, color) => (
-    <div style={{ height: "3px", background: "rgba(255,255,255,0.06)", borderRadius: "2px", flex: 1 }}>
-      <div style={{
-        height: "100%", borderRadius: "2px", background: color,
-        width: `${Math.min((val / max) * 100, 100)}%`,
-        transition: "width 0.6s cubic-bezier(0.4,0,0.2,1)"
-      }} />
+    <div
+      style={{
+        height: "3px",
+        background: "rgba(255,255,255,0.06)",
+        borderRadius: "2px",
+        flex: 1,
+      }}
+    >
+      <div
+        style={{
+          height: "100%",
+          borderRadius: "2px",
+          background: color,
+          width: `${Math.min((val / max) * 100, 100)}%`,
+          transition: "width 0.6s cubic-bezier(0.4,0,0.2,1)",
+        }}
+      />
     </div>
   );
 
   const isAdjusted = multiplier != null && multiplier !== 1.0;
 
   return (
-    <div style={{
-      position: "relative",
-      background: expanded ? "rgba(232,200,114,0.03)" : "rgba(255,255,255,0.02)",
-      borderBottom: "1px solid rgba(255,255,255,0.04)",
-      animation: `fadeSlideIn 0.4s ${index * 0.08}s both ease-out`,
-      transition: "background 0.2s",
-    }}>
+    <div
+      style={{
+        position: "relative",
+        background: expanded
+          ? "rgba(232,200,114,0.03)"
+          : "rgba(255,255,255,0.02)",
+        borderBottom: "1px solid rgba(255,255,255,0.04)",
+        animation: `fadeSlideIn 0.4s ${index * 0.08}s both ease-out`,
+        transition: "background 0.2s",
+      }}
+    >
       {expanded && editable && onRemove && (
-        <button onClick={(e) => { e.stopPropagation(); onRemove(); }} style={{
-          position: "absolute", top: "5px", right: "8px", zIndex: 1,
-          width: "20px", height: "20px", borderRadius: "50%", border: "none", cursor: "pointer",
-          background: "rgba(232,114,114,0.1)", color: "#E87272", fontSize: "10px",
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>✕</button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+          style={{
+            position: "absolute",
+            top: "5px",
+            right: "8px",
+            zIndex: 1,
+            width: "20px",
+            height: "20px",
+            borderRadius: "50%",
+            border: "none",
+            cursor: "pointer",
+            background: "rgba(232,114,114,0.1)",
+            color: "#E87272",
+            fontSize: "10px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          ✕
+        </button>
       )}
       <div
         onClick={editable ? onToggle : undefined}
@@ -254,80 +477,348 @@ function ItemRow({ item, index, expanded, multiplier, editable, onToggle, onMult
           cursor: editable ? "pointer" : "default",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "8px" }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: "8px", minWidth: 0, flex: 1 }}>
-            <span style={{ color: "#fff", fontSize: "14px", fontWeight: 600 }}>{item.name}</span>
-            <span style={{ color: "rgba(255,255,255,0.3)", fontSize: "12px" }}>{item.portion}</span>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "baseline",
+            marginBottom: "8px",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "baseline",
+              gap: "8px",
+              minWidth: 0,
+              flex: 1,
+            }}
+          >
+            <span style={{ color: "#fff", fontSize: "14px", fontWeight: 600 }}>
+              {item.name}
+            </span>
+            <span style={{ color: "rgba(255,255,255,0.3)", fontSize: "12px" }}>
+              {item.portion}
+            </span>
             {isAdjusted && !expanded && (
-              <span style={{
-                padding: "1px 6px", borderRadius: "4px",
-                background: "rgba(232,200,114,0.15)", color: "#E8C872",
-                fontSize: "10px", fontWeight: 700, flexShrink: 0,
-              }}>{parseFloat(multiplier.toFixed(2))}×</span>
+              <span
+                style={{
+                  padding: "1px 6px",
+                  borderRadius: "4px",
+                  background: "rgba(232,200,114,0.15)",
+                  color: "#E8C872",
+                  fontSize: "10px",
+                  fontWeight: 700,
+                  flexShrink: 0,
+                }}
+              >
+                {parseFloat(multiplier.toFixed(2))}×
+              </span>
             )}
           </div>
-          <span style={{ color: "#E8C872", fontSize: "14px", fontWeight: 700, fontVariantNumeric: "tabular-nums", flexShrink: 0, marginLeft: "8px" }}>
+          <span
+            style={{
+              color: "#E8C872",
+              fontSize: "14px",
+              fontWeight: 700,
+              fontVariantNumeric: "tabular-nums",
+              flexShrink: 0,
+              marginLeft: "8px",
+            }}
+          >
             {item.calories} cal
           </span>
         </div>
         <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "6px" }}>
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              gap: "6px",
+            }}
+          >
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span style={{ width: "14px", fontSize: "10px", color: "#7BE0AD" }}>P</span>
+              <span
+                style={{ width: "14px", fontSize: "10px", color: "#7BE0AD" }}
+              >
+                P
+              </span>
               {macroBar(item.protein_g, 50, "#7BE0AD")}
-              <span style={{ width: "28px", fontSize: "11px", color: "rgba(255,255,255,0.4)", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{item.protein_g}g</span>
+              <span
+                style={{
+                  width: "28px",
+                  fontSize: "11px",
+                  color: "rgba(255,255,255,0.4)",
+                  textAlign: "right",
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {item.protein_g}g
+              </span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span style={{ width: "14px", fontSize: "10px", color: "#72B4E8" }}>C</span>
+              <span
+                style={{ width: "14px", fontSize: "10px", color: "#72B4E8" }}
+              >
+                C
+              </span>
               {macroBar(item.carbs_g, 80, "#72B4E8")}
-              <span style={{ width: "28px", fontSize: "11px", color: "rgba(255,255,255,0.4)", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{item.carbs_g}g</span>
+              <span
+                style={{
+                  width: "28px",
+                  fontSize: "11px",
+                  color: "rgba(255,255,255,0.4)",
+                  textAlign: "right",
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {item.carbs_g}g
+              </span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span style={{ width: "14px", fontSize: "10px", color: "#E87272" }}>F</span>
+              <span
+                style={{ width: "14px", fontSize: "10px", color: "#E87272" }}
+              >
+                F
+              </span>
               {macroBar(item.fat_g, 40, "#E87272")}
-              <span style={{ width: "28px", fontSize: "11px", color: "rgba(255,255,255,0.4)", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{item.fat_g}g</span>
+              <span
+                style={{
+                  width: "28px",
+                  fontSize: "11px",
+                  color: "rgba(255,255,255,0.4)",
+                  textAlign: "right",
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
+                {item.fat_g}g
+              </span>
             </div>
           </div>
         </div>
       </div>
       {expanded && editable && (
-        <div style={{
-          display: "flex", alignItems: "center", justifyContent: "center",
-          gap: "20px", padding: "4px 20px 16px",
-        }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "20px",
+            padding: "4px 20px 16px",
+          }}
+        >
           {onMultiplierChange && (
             <>
               <button
-                onClick={(e) => { e.stopPropagation(); onMultiplierChange(Math.max(0.25, multiplier - 0.25)); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMultiplierChange(Math.max(0.25, multiplier - 0.25));
+                }}
                 style={{
-                  width: "36px", height: "36px", borderRadius: "50%",
-                  border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.04)",
-                  color: "#fff", cursor: "pointer", fontSize: "18px",
-                  display: "flex", alignItems: "center", justifyContent: "center",
+                  width: "36px",
+                  height: "36px",
+                  borderRadius: "50%",
+                  border: "1px solid rgba(255,255,255,0.12)",
+                  background: "rgba(255,255,255,0.04)",
+                  color: "#fff",
+                  cursor: "pointer",
+                  fontSize: "18px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                   fontFamily: "'DM Sans',sans-serif",
                 }}
-              >−</button>
-              <span style={{
-                fontSize: "18px", fontWeight: 700, minWidth: "50px", textAlign: "center",
-                color: isAdjusted ? "#E8C872" : "rgba(255,255,255,0.5)",
-                fontVariantNumeric: "tabular-nums",
-              }}>
+              >
+                −
+              </button>
+              <span
+                style={{
+                  fontSize: "18px",
+                  fontWeight: 700,
+                  minWidth: "50px",
+                  textAlign: "center",
+                  color: isAdjusted ? "#E8C872" : "rgba(255,255,255,0.5)",
+                  fontVariantNumeric: "tabular-nums",
+                }}
+              >
                 {parseFloat(multiplier.toFixed(2))}×
               </span>
               <button
-                onClick={(e) => { e.stopPropagation(); onMultiplierChange(multiplier + 0.25); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMultiplierChange(multiplier + 0.25);
+                }}
                 style={{
-                  width: "36px", height: "36px", borderRadius: "50%",
-                  border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.04)",
-                  color: "#fff", cursor: "pointer", fontSize: "18px",
-                  display: "flex", alignItems: "center", justifyContent: "center",
+                  width: "36px",
+                  height: "36px",
+                  borderRadius: "50%",
+                  border: "1px solid rgba(255,255,255,0.12)",
+                  background: "rgba(255,255,255,0.04)",
+                  color: "#fff",
+                  cursor: "pointer",
+                  fontSize: "18px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                   fontFamily: "'DM Sans',sans-serif",
                 }}
-              >+</button>
+              >
+                +
+              </button>
             </>
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+const TAB_CONFIG = [
+  {
+    id: "capture",
+    label: "Scan",
+    icon: (color) => (
+      <svg
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" />
+        <circle cx="12" cy="13" r="4" />
+      </svg>
+    ),
+  },
+  {
+    id: "daily",
+    label: "Log",
+    icon: (color) => (
+      <svg
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2" />
+        <rect x="8" y="2" width="8" height="4" rx="1" />
+        <line x1="9" y1="12" x2="15" y2="12" />
+        <line x1="9" y1="16" x2="13" y2="16" />
+      </svg>
+    ),
+  },
+  {
+    id: "weekly",
+    label: "Stats",
+    icon: (color) => (
+      <svg
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <line x1="18" y1="20" x2="18" y2="10" />
+        <line x1="12" y1="20" x2="12" y2="4" />
+        <line x1="6" y1="20" x2="6" y2="14" />
+      </svg>
+    ),
+  },
+  {
+    id: "settings",
+    label: "Goals",
+    icon: (color) => (
+      <svg
+        width="24"
+        height="24"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <circle cx="12" cy="12" r="10" />
+        <circle cx="12" cy="12" r="6" />
+        <circle cx="12" cy="12" r="2" />
+      </svg>
+    ),
+  },
+];
+
+function BottomTabBar({ view, dailyLogCount, onTabChange }) {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        bottom: 0,
+        left: 0,
+        right: 0,
+        zIndex: 50,
+        display: "flex",
+        justifyContent: "space-around",
+        alignItems: "center",
+        background: "#0C0C0E",
+        borderTop: "1px solid rgba(255,255,255,0.06)",
+        paddingTop: "8px",
+        paddingBottom: "calc(8px + env(safe-area-inset-bottom, 0px))",
+        maxWidth: "480px",
+        margin: "0 auto",
+      }}
+    >
+      {TAB_CONFIG.map((tab) => {
+        const isActive =
+          tab.id === view ||
+          (tab.id === "capture" && (view === "result" || view === "manual"));
+        const color = isActive ? "#E8C872" : "rgba(255,255,255,0.45)";
+        const label =
+          tab.id === "daily" && dailyLogCount > 0
+            ? `Log (${dailyLogCount})`
+            : tab.label;
+        return (
+          <button
+            key={tab.id}
+            onClick={() => onTabChange(tab.id)}
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "4px",
+              padding: 0,
+              minHeight: "44px",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              WebkitTapHighlightColor: "transparent",
+            }}
+          >
+            {tab.icon(color)}
+            <span
+              style={{
+                fontSize: "10px",
+                fontWeight: isActive ? 600 : 400,
+                fontFamily: "'DM Sans',sans-serif",
+                color,
+                letterSpacing: "0.2px",
+              }}
+            >
+              {label}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -342,15 +833,29 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [dailyLog, setDailyLog] = useState([]);
-  const [dailyTotals, setDailyTotals] = useState({ calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0, sugar_g: 0 });
-  const [goals, setGoals] = useState({ calories: 2200, proteinG: 150, carbsG: 275, fatG: 75 });
+  const [dailyTotals, setDailyTotals] = useState({
+    calories: 0,
+    protein_g: 0,
+    carbs_g: 0,
+    fat_g: 0,
+    fiber_g: 0,
+    sugar_g: 0,
+  });
+  const [goals, setGoals] = useState({
+    calories: 2200,
+    proteinG: 150,
+    carbsG: 275,
+    fatG: 75,
+  });
   const [view, setView] = useState("capture");
   const [mealDetailMode, setMealDetailMode] = useState(false);
   const [scaledImageData, setScaledImageData] = useState(null);
   const [expandedItemIndex, setExpandedItemIndex] = useState(null);
   const [itemAdjustments, setItemAdjustments] = useState([]);
   const [selectedDate, setSelectedDate] = useState(() => toLocalDateStr());
-  const [selectedMealType, setSelectedMealType] = useState(() => inferMealType());
+  const [selectedMealType, setSelectedMealType] = useState(() =>
+    inferMealType(),
+  );
   // Manual entry state
   const [manualQuery, setManualQuery] = useState("");
   const [manualResults, setManualResults] = useState([]);
@@ -375,18 +880,20 @@ export default function App() {
   const isGuest = !user;
   const todayStr = toLocalDateStr();
   const isToday = selectedDate === todayStr;
-  const [weekStart, setWeekStart] = useState(() => getWeekStartMonday(todayStr));
+  const [weekStart, setWeekStart] = useState(() =>
+    getWeekStartMonday(todayStr),
+  );
   const isCurrentWeek = weekStart === getWeekStartMonday(todayStr);
 
   const changeDate = (delta) => {
-    const [y, m, d] = selectedDate.split('-').map(Number);
+    const [y, m, d] = selectedDate.split("-").map(Number);
     const date = new Date(y, m - 1, d + delta);
     const newStr = toLocalDateStr(date);
     if (newStr <= todayStr) setSelectedDate(newStr);
   };
 
   const changeWeek = (delta) => {
-    const [y, m, d] = weekStart.split('-').map(Number);
+    const [y, m, d] = weekStart.split("-").map(Number);
     const date = new Date(y, m - 1, d + delta * 7);
     const newStart = getWeekStartMonday(toLocalDateStr(date));
     if (newStart <= getWeekStartMonday(todayStr)) setWeekStart(newStart);
@@ -399,15 +906,18 @@ export default function App() {
       executeDelete(deleteToast.mealIdOrIndex);
       setDeleteToast(null);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate, view]);
 
   // Check for existing auth on mount (non-blocking — app shows immediately)
   useEffect(() => {
     const token = getToken();
-    if (!token) { setAuthChecking(false); return; }
+    if (!token) {
+      setAuthChecking(false);
+      return;
+    }
     getMe()
-      .then(data => setUser(data.user || data))
+      .then((data) => setUser(data.user || data))
       .catch(() => clearToken())
       .finally(() => setAuthChecking(false));
   }, []);
@@ -424,7 +934,16 @@ export default function App() {
     try {
       const data = await getMeals(selectedDate);
       setDailyLog(data.meals || []);
-      setDailyTotals(data.totals || { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0, sugar_g: 0 });
+      setDailyTotals(
+        data.totals || {
+          calories: 0,
+          protein_g: 0,
+          carbs_g: 0,
+          fat_g: 0,
+          fiber_g: 0,
+          sugar_g: 0,
+        },
+      );
     } catch (err) {
       if (err.status === 401) setUser(null);
     }
@@ -442,7 +961,9 @@ export default function App() {
   useEffect(() => {
     refreshData();
     if (user) {
-      getGoals().then(g => setGoals(g)).catch(() => {});
+      getGoals()
+        .then((g) => setGoals(g))
+        .catch(() => {});
     }
   }, [user, refreshData]);
 
@@ -453,7 +974,13 @@ export default function App() {
       const days = getWeekDays(weekStart);
       const dailyMap = {};
       for (const day of days) {
-        dailyMap[day.date] = { ...day, calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
+        dailyMap[day.date] = {
+          ...day,
+          calories: 0,
+          protein_g: 0,
+          carbs_g: 0,
+          fat_g: 0,
+        };
       }
 
       let meals;
@@ -461,7 +988,7 @@ export default function App() {
         meals = await getMealsRange(days[0].date, days[6].date);
       } else {
         const allGuest = getGuestMeals();
-        meals = allGuest.filter(m => {
+        meals = allGuest.filter((m) => {
           const d = toLocalDateStr(new Date(m.scannedAt));
           return d >= days[0].date && d <= days[6].date;
         });
@@ -479,13 +1006,15 @@ export default function App() {
           }
         }
       }
-      setWeeklyData(days.map(d => ({
-        ...dailyMap[d.date],
-        calories: Math.round(dailyMap[d.date].calories),
-        protein_g: Math.round(dailyMap[d.date].protein_g),
-        carbs_g: Math.round(dailyMap[d.date].carbs_g),
-        fat_g: Math.round(dailyMap[d.date].fat_g),
-      })));
+      setWeeklyData(
+        days.map((d) => ({
+          ...dailyMap[d.date],
+          calories: Math.round(dailyMap[d.date].calories),
+          protein_g: Math.round(dailyMap[d.date].protein_g),
+          carbs_g: Math.round(dailyMap[d.date].carbs_g),
+          fat_g: Math.round(dailyMap[d.date].fat_g),
+        })),
+      );
     } catch (err) {
       if (err.status === 401) setUser(null);
     } finally {
@@ -502,7 +1031,8 @@ export default function App() {
     if (analysis) {
       setItemAdjustments(analysis.items.map(() => ({ multiplier: 1.0 })));
       setExpandedItemIndex(null);
-      setExtraItems([]); setExtraItemAdjustments([]);
+      setExtraItems([]);
+      setExtraItemAdjustments([]);
       setAddingExtraItem(false);
       if (!mealDetailMode) setSelectedMealType(inferMealType());
     } else {
@@ -511,11 +1041,16 @@ export default function App() {
   }, [analysis, mealDetailMode]);
 
   // Compute adjusted items and totals based on multipliers
-  const scaledImageUrl = scaledImageData ? `data:${scaledImageData.mediaType};base64,${scaledImageData.base64}` : null;
+  const scaledImageUrl = scaledImageData
+    ? `data:${scaledImageData.mediaType};base64,${scaledImageData.base64}`
+    : null;
 
   const { adjustedItems, adjustedTotals } = useMemo(() => {
     if (!analysis || itemAdjustments.length !== analysis.items.length) {
-      return { adjustedItems: analysis?.items ?? null, adjustedTotals: analysis?.totals ?? null };
+      return {
+        adjustedItems: analysis?.items ?? null,
+        adjustedTotals: analysis?.totals ?? null,
+      };
     }
     const items = analysis.items.map((item, i) => {
       const mult = itemAdjustments[i].multiplier;
@@ -544,35 +1079,53 @@ export default function App() {
       };
     });
     const allItems = [...items, ...adjustedExtras];
-    const totals = allItems.reduce((acc, item) => ({
-      calories: acc.calories + item.calories,
-      protein_g: +(acc.protein_g + (item.protein_g ?? 0)).toFixed(1),
-      carbs_g: +(acc.carbs_g + (item.carbs_g ?? 0)).toFixed(1),
-      fat_g: +(acc.fat_g + (item.fat_g ?? 0)).toFixed(1),
-      fiber_g: +(acc.fiber_g + (item.fiber_g ?? 0)).toFixed(1),
-      sugar_g: +(acc.sugar_g + (item.sugar_g ?? 0)).toFixed(1),
-    }), { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0, sugar_g: 0 });
+    const totals = allItems.reduce(
+      (acc, item) => ({
+        calories: acc.calories + item.calories,
+        protein_g: +(acc.protein_g + (item.protein_g ?? 0)).toFixed(1),
+        carbs_g: +(acc.carbs_g + (item.carbs_g ?? 0)).toFixed(1),
+        fat_g: +(acc.fat_g + (item.fat_g ?? 0)).toFixed(1),
+        fiber_g: +(acc.fiber_g + (item.fiber_g ?? 0)).toFixed(1),
+        sugar_g: +(acc.sugar_g + (item.sugar_g ?? 0)).toFixed(1),
+      }),
+      {
+        calories: 0,
+        protein_g: 0,
+        carbs_g: 0,
+        fat_g: 0,
+        fiber_g: 0,
+        sugar_g: 0,
+      },
+    );
     return { adjustedItems: allItems, adjustedTotals: totals };
   }, [analysis, itemAdjustments, extraItems, extraItemAdjustments]);
 
   const updateItemMultiplier = (index, newMultiplier) => {
-    setItemAdjustments(prev => prev.map((adj, i) =>
-      i === index ? { ...adj, multiplier: Math.max(0.25, newMultiplier) } : adj
-    ));
+    setItemAdjustments((prev) =>
+      prev.map((adj, i) =>
+        i === index
+          ? { ...adj, multiplier: Math.max(0.25, newMultiplier) }
+          : adj,
+      ),
+    );
   };
 
   const updateExtraItemMultiplier = (index, newMultiplier) => {
-    setExtraItemAdjustments(prev => prev.map((adj, i) =>
-      i === index ? { ...adj, multiplier: Math.max(0.25, newMultiplier) } : adj
-    ));
+    setExtraItemAdjustments((prev) =>
+      prev.map((adj, i) =>
+        i === index
+          ? { ...adj, multiplier: Math.max(0.25, newMultiplier) }
+          : adj,
+      ),
+    );
   };
 
   const removeAnalysisItem = (index) => {
-    setAnalysis(prev => ({
+    setAnalysis((prev) => ({
       ...prev,
       items: prev.items.filter((_, i) => i !== index),
     }));
-    setItemAdjustments(prev => prev.filter((_, i) => i !== index));
+    setItemAdjustments((prev) => prev.filter((_, i) => i !== index));
     setExpandedItemIndex(null);
   };
 
@@ -602,7 +1155,10 @@ export default function App() {
     setError(null);
 
     try {
-      const scaled = await downscaleImage(imageData.base64, imageData.mediaType);
+      const scaled = await downscaleImage(
+        imageData.base64,
+        imageData.mediaType,
+      );
       setScaledImageData(scaled);
 
       // Analyze only — save happens in addToDaily after user can edit portions
@@ -614,7 +1170,10 @@ export default function App() {
       });
       setView("result");
     } catch (err) {
-      if (err.status === 401) { setUser(null); return; }
+      if (err.status === 401) {
+        setUser(null);
+        return;
+      }
       setError(err.message || "Analysis failed. Please try again.");
     } finally {
       setLoading(false);
@@ -625,9 +1184,21 @@ export default function App() {
     if (!adjustedItems) return;
     try {
       if (isGuest) {
-        addGuestMeal({ items: adjustedItems, meal_notes: analysis.meal_notes, provider: "gemini", imageUrl: scaledImageUrl, mealType: selectedMealType });
+        addGuestMeal({
+          items: adjustedItems,
+          meal_notes: analysis.meal_notes,
+          provider: "gemini",
+          imageUrl: scaledImageUrl,
+          mealType: selectedMealType,
+        });
       } else {
-        await saveMeal(adjustedItems, analysis.meal_notes, scaledImageData?.base64, scaledImageData?.mediaType, selectedMealType);
+        await saveMeal(
+          adjustedItems,
+          analysis.meal_notes,
+          scaledImageData?.base64,
+          scaledImageData?.mediaType,
+          selectedMealType,
+        );
       }
     } catch (err) {
       setError("Failed to save meal");
@@ -639,7 +1210,8 @@ export default function App() {
     setError(null);
     setScaledImageData(null);
     setMealDetailMode(false);
-    setExtraItems([]); setExtraItemAdjustments([]);
+    setExtraItems([]);
+    setExtraItemAdjustments([]);
     setAddingExtraItem(false);
     setView("daily");
     // New meals are always "today" — navigate there and refresh
@@ -656,14 +1228,19 @@ export default function App() {
     setManualQuery(query);
     setSelectedFood(null);
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    if (!query.trim()) { setManualResults([]); return; }
+    if (!query.trim()) {
+      setManualResults([]);
+      return;
+    }
     searchTimeoutRef.current = setTimeout(async () => {
       setManualSearching(true);
       try {
         const results = await searchNutrition(query);
         setManualResults(results);
-      } catch {}
-      finally { setManualSearching(false); }
+      } catch {
+      } finally {
+        setManualSearching(false);
+      }
     }, 500);
   };
 
@@ -688,11 +1265,14 @@ export default function App() {
 
   const addManualItem = () => {
     if (!selectedFood || !scaledFoodMacros) return;
-    setManualItems(prev => [...prev, {
-      name: selectedFood.name,
-      portion: `${manualGrams}g`,
-      ...scaledFoodMacros,
-    }]);
+    setManualItems((prev) => [
+      ...prev,
+      {
+        name: selectedFood.name,
+        portion: `${manualGrams}g`,
+        ...scaledFoodMacros,
+      },
+    ]);
     setSelectedFood(null);
     setManualQuery("");
     setManualResults([]);
@@ -700,12 +1280,15 @@ export default function App() {
 
   const addExtraItemToScan = () => {
     if (!selectedFood || !scaledFoodMacros) return;
-    setExtraItems(prev => [...prev, {
-      name: selectedFood.name,
-      portion: `${manualGrams}g`,
-      ...scaledFoodMacros,
-    }]);
-    setExtraItemAdjustments(prev => [...prev, { multiplier: 1.0 }]);
+    setExtraItems((prev) => [
+      ...prev,
+      {
+        name: selectedFood.name,
+        portion: `${manualGrams}g`,
+        ...scaledFoodMacros,
+      },
+    ]);
+    setExtraItemAdjustments((prev) => [...prev, { multiplier: 1.0 }]);
     setSelectedFood(null);
     setManualQuery("");
     setManualResults([]);
@@ -713,8 +1296,8 @@ export default function App() {
   };
 
   const removeExtraItem = (index) => {
-    setExtraItems(prev => prev.filter((_, i) => i !== index));
-    setExtraItemAdjustments(prev => prev.filter((_, i) => i !== index));
+    setExtraItems((prev) => prev.filter((_, i) => i !== index));
+    setExtraItemAdjustments((prev) => prev.filter((_, i) => i !== index));
     setExpandedExtraIndex(null);
   };
 
@@ -722,9 +1305,21 @@ export default function App() {
     if (manualItems.length === 0) return;
     try {
       if (isGuest) {
-        addGuestMeal({ items: manualItems, meal_notes: null, provider: "manual", mealType: selectedMealType });
+        addGuestMeal({
+          items: manualItems,
+          meal_notes: null,
+          provider: "manual",
+          mealType: selectedMealType,
+        });
       } else {
-        await saveMeal(manualItems, null, null, null, selectedMealType, "manual");
+        await saveMeal(
+          manualItems,
+          null,
+          null,
+          null,
+          selectedMealType,
+          "manual",
+        );
       }
     } catch {
       setError("Failed to save meal");
@@ -754,7 +1349,8 @@ export default function App() {
     setManualResults([]);
     setManualItems([]);
     setSelectedFood(null);
-    setExtraItems([]); setExtraItemAdjustments([]);
+    setExtraItems([]);
+    setExtraItemAdjustments([]);
     setAddingExtraItem(false);
     setView("capture");
   };
@@ -798,7 +1394,14 @@ export default function App() {
     clearToken();
     setUser(null);
     setDailyLog([]);
-    setDailyTotals({ calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0, sugar_g: 0 });
+    setDailyTotals({
+      calories: 0,
+      protein_g: 0,
+      carbs_g: 0,
+      fat_g: 0,
+      fiber_g: 0,
+      sugar_g: 0,
+    });
     setGoals({ calories: 2200, proteinG: 150, carbsG: 275, fatG: 75 });
     setView("capture");
   };
@@ -806,19 +1409,39 @@ export default function App() {
   // Auth checking splash
   if (authChecking) {
     return (
-      <div style={{
-        fontFamily: "'DM Sans', sans-serif", background: "#0C0C0E",
-        minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center",
-      }}>
+      <div
+        style={{
+          fontFamily: "'DM Sans', sans-serif",
+          background: "#0C0C0E",
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
         <div style={{ textAlign: "center" }}>
-          <h1 style={{ fontFamily: "'Instrument Serif', serif", fontSize: "42px", fontWeight: 400, color: "#fff" }}>
+          <h1
+            style={{
+              fontFamily: "'Instrument Serif', serif",
+              fontSize: "42px",
+              fontWeight: 400,
+              color: "#fff",
+            }}
+          >
             Macro<span style={{ color: "#E8C872" }}>.</span>
           </h1>
-          <div style={{
-            height: "3px", borderRadius: "2px", margin: "16px auto 0", width: "120px",
-            background: "linear-gradient(90deg, transparent, #E8C872, transparent)",
-            backgroundSize: "200% 100%", animation: "shimmer 1.5s infinite",
-          }} />
+          <div
+            style={{
+              height: "3px",
+              borderRadius: "2px",
+              margin: "16px auto 0",
+              width: "120px",
+              background:
+                "linear-gradient(90deg, transparent, #E8C872, transparent)",
+              backgroundSize: "200% 100%",
+              animation: "shimmer 1.5s infinite",
+            }}
+          />
         </div>
         <style>{`
           @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
@@ -828,16 +1451,21 @@ export default function App() {
   }
 
   return (
-    <div style={{
-      fontFamily: "'DM Sans', sans-serif",
-      background: "#0C0C0E",
-      minHeight: "100vh",
-      color: "#fff",
-      maxWidth: "480px",
-      margin: "0 auto",
-      position: "relative",
-      overflow: "hidden"
-    }}>
+    <div
+      style={{
+        fontFamily: "'DM Sans', sans-serif",
+        background: "#0C0C0E",
+        minHeight: "100vh",
+        color: "#fff",
+        maxWidth: "480px",
+        margin: "0 auto",
+        position: "relative",
+        overflow: "hidden",
+        paddingBottom: ["capture", "daily", "weekly", "settings"].includes(view)
+          ? "calc(72px + env(safe-area-inset-bottom, 0px))"
+          : "0px",
+      }}
+    >
       <style>{`
         @keyframes fadeSlideIn {
           from { opacity: 0; transform: translateY(12px); }
@@ -855,131 +1483,267 @@ export default function App() {
 
       {/* Auth Overlay */}
       {showAuth && (
-        <div style={{
-          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-          zIndex: 100, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          <div style={{ position: "relative", width: "100%", maxWidth: "480px" }}>
-            <button onClick={() => setShowAuth(false)} style={{
-              position: "absolute", top: "12px", right: "36px", zIndex: 101,
-              width: "32px", height: "32px", borderRadius: "50%",
-              background: "rgba(255,255,255,0.1)", border: "none",
-              color: "#fff", cursor: "pointer", fontSize: "16px",
-            }}>✕</button>
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 100,
+            background: "rgba(0,0,0,0.7)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <div
+            style={{ position: "relative", width: "100%", maxWidth: "480px" }}
+          >
+            <button
+              onClick={() => setShowAuth(false)}
+              style={{
+                position: "absolute",
+                top: "12px",
+                right: "36px",
+                zIndex: 101,
+                width: "32px",
+                height: "32px",
+                borderRadius: "50%",
+                background: "rgba(255,255,255,0.1)",
+                border: "none",
+                color: "#fff",
+                cursor: "pointer",
+                fontSize: "16px",
+              }}
+            >
+              ✕
+            </button>
             <AuthScreen onAuth={handleAuth} />
           </div>
         </div>
       )}
 
       {/* Header */}
-      <div style={{
-        padding: "20px 20px 16px",
-        borderBottom: "1px solid rgba(255,255,255,0.04)",
-        display: "flex", justifyContent: "space-between", alignItems: "center"
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <h1 onClick={resetCapture} style={{ fontFamily: "'Instrument Serif', serif", fontSize: "26px", fontWeight: 400, letterSpacing: "-0.5px", cursor: "pointer" }}>
-            Macro<span style={{ color: "#E8C872" }}>.</span>
-          </h1>
-        </div>
-        <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
-          {user ? (
-            <button onClick={handleLogout} style={{
-              padding: "6px 12px", borderRadius: "20px", border: "none", cursor: "pointer",
-              background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.3)",
-              fontSize: "11px", fontFamily: "'DM Sans',sans-serif",
-            }}>Log out</button>
-          ) : (
-            <button onClick={() => setShowAuth(true)} style={{
-              padding: "6px 12px", borderRadius: "20px", border: "none", cursor: "pointer",
-              background: "rgba(232,200,114,0.12)", color: "#E8C872",
-              fontSize: "11px", fontWeight: 600, fontFamily: "'DM Sans',sans-serif",
-            }}>Sign up</button>
-          )}
-          {["capture", "daily", "weekly"].map(v => (
-            <button key={v} onClick={() => {
-              setView(v);
-              if (v === "daily") refreshData();
-              if (v === "weekly") loadWeeklyData();
-            }} style={{
-              padding: "6px 14px", borderRadius: "20px", border: "none", cursor: "pointer",
-              fontSize: "12px", fontWeight: 500, fontFamily: "'DM Sans',sans-serif",
-              textTransform: "uppercase", letterSpacing: "0.5px",
-              background: view === v || (v === "capture" && (view === "result" || view === "manual")) ? "rgba(232,200,114,0.12)" : "transparent",
-              color: view === v || (v === "capture" && (view === "result" || view === "manual")) ? "#E8C872" : "rgba(255,255,255,0.3)",
-              transition: "all 0.2s"
-            }}>
-              {v === "capture" ? "Scan" : v === "daily" ? `Log (${dailyLog.length})` : "Stats"}
-            </button>
-          ))}
-        </div>
+      <div
+        style={{
+          padding: "16px 20px",
+          borderBottom: "1px solid rgba(255,255,255,0.04)",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
+      >
+        <h1
+          onClick={resetCapture}
+          style={{
+            fontFamily: "'Instrument Serif', serif",
+            fontSize: "26px",
+            fontWeight: 400,
+            letterSpacing: "-0.5px",
+            cursor: "pointer",
+          }}
+        >
+          Macro-Tracker<span style={{ color: "#E8C872" }}>.</span>
+        </h1>
+        {user ? (
+          <button
+            onClick={handleLogout}
+            style={{
+              padding: "8px 16px",
+              borderRadius: "20px",
+              border: "none",
+              cursor: "pointer",
+              background: "rgba(255,255,255,0.04)",
+              color: "rgba(255,255,255,0.45)",
+              fontSize: "12px",
+              fontFamily: "'DM Sans',sans-serif",
+              minHeight: "36px",
+            }}
+          >
+            Log out
+          </button>
+        ) : (
+          <button
+            onClick={() => setShowAuth(true)}
+            style={{
+              padding: "8px 16px",
+              borderRadius: "20px",
+              border: "none",
+              cursor: "pointer",
+              background: "rgba(232,200,114,0.12)",
+              color: "#E8C872",
+              fontSize: "12px",
+              fontWeight: 600,
+              fontFamily: "'DM Sans',sans-serif",
+              minHeight: "36px",
+            }}
+          >
+            Login
+          </button>
+        )}
       </div>
 
       {/* Capture View */}
       {(view === "capture" || view === "result") && (
         <div style={{ animation: "fadeSlideIn 0.3s ease-out" }}>
           {view === "capture" && !image ? (
-            <div style={{ padding: "40px 20px", display: "flex", flexDirection: "column", alignItems: "center", gap: "24px" }}>
-              <div style={{
-                width: "100%", aspectRatio: "4/3", borderRadius: "16px",
-                border: "2px dashed rgba(255,255,255,0.08)",
-                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                gap: "16px", background: "rgba(255,255,255,0.015)"
-              }}>
+            <div
+              style={{
+                padding: "40px 20px",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "24px",
+              }}
+            >
+              <div
+                style={{
+                  width: "100%",
+                  aspectRatio: "4/3",
+                  borderRadius: "16px",
+                  border: "2px dashed rgba(255,255,255,0.08)",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "16px",
+                  background: "rgba(255,255,255,0.015)",
+                }}
+              >
                 <div style={{ fontSize: "48px", opacity: 0.2 }}>📸</div>
-                <p style={{ color: "rgba(255,255,255,0.3)", fontSize: "14px", textAlign: "center", lineHeight: 1.5 }}>
-                  Snap a photo of your meal<br />
-                  <span style={{ fontSize: "12px", opacity: 0.6 }}>AI will estimate your macros instantly</span>
+                <p
+                  style={{
+                    color: "rgba(255,255,255,0.3)",
+                    fontSize: "14px",
+                    textAlign: "center",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  Snap a photo of your meal
+                  <br />
+                  <span style={{ fontSize: "12px", opacity: 0.6 }}>
+                    AI will estimate your macros instantly
+                  </span>
                 </p>
               </div>
 
               <div style={{ display: "flex", gap: "12px", width: "100%" }}>
-                <button onClick={() => cameraInputRef.current?.click()} style={{
-                  flex: 1, padding: "14px", borderRadius: "12px", border: "none", cursor: "pointer",
-                  background: "linear-gradient(135deg, #E8C872, #D4A843)", color: "#0C0C0E",
-                  fontSize: "14px", fontWeight: 700, fontFamily: "'DM Sans',sans-serif",
-                  letterSpacing: "0.3px"
-                }}>
+                <button
+                  onClick={() => cameraInputRef.current?.click()}
+                  style={{
+                    flex: 1,
+                    padding: "14px",
+                    borderRadius: "12px",
+                    border: "none",
+                    cursor: "pointer",
+                    background: "linear-gradient(135deg, #E8C872, #D4A843)",
+                    color: "#0C0C0E",
+                    fontSize: "14px",
+                    fontWeight: 700,
+                    fontFamily: "'DM Sans',sans-serif",
+                    letterSpacing: "0.3px",
+                  }}
+                >
                   📷 Camera
                 </button>
-                <button onClick={() => fileInputRef.current?.click()} style={{
-                  flex: 1, padding: "14px", borderRadius: "12px", cursor: "pointer",
-                  border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.03)",
-                  color: "#fff", fontSize: "14px", fontWeight: 500, fontFamily: "'DM Sans',sans-serif"
-                }}>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  style={{
+                    flex: 1,
+                    padding: "14px",
+                    borderRadius: "12px",
+                    cursor: "pointer",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    background: "rgba(255,255,255,0.03)",
+                    color: "#fff",
+                    fontSize: "14px",
+                    fontWeight: 500,
+                    fontFamily: "'DM Sans',sans-serif",
+                  }}
+                >
                   🖼️ Gallery
                 </button>
               </div>
 
-              <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" onChange={e => handleFile(e.target.files?.[0])} style={{ display: "none" }} />
-              <input ref={fileInputRef} type="file" accept="image/*" onChange={e => handleFile(e.target.files?.[0])} style={{ display: "none" }} />
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={(e) => handleFile(e.target.files?.[0])}
+                style={{ display: "none" }}
+              />
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={(e) => handleFile(e.target.files?.[0])}
+                style={{ display: "none" }}
+              />
 
-              <button onClick={() => setView("manual")} style={{
-                background: "none", border: "none", cursor: "pointer",
-                color: "rgba(255,255,255,0.4)", fontSize: "13px",
-                fontFamily: "'DM Sans',sans-serif", padding: "4px",
-              }}>or type it in</button>
+              <button
+                onClick={() => setView("manual")}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "rgba(255,255,255,0.45)",
+                  fontSize: "13px",
+                  fontFamily: "'DM Sans',sans-serif",
+                  padding: "12px 24px",
+                  minHeight: "44px",
+                }}
+              >
+                or type it in
+              </button>
             </div>
           ) : (
             <div>
               {/* Image preview (only if image exists) */}
               {image && (
                 <div style={{ position: "relative" }}>
-                  <img src={image} alt="Food" style={{
-                    width: "100%", maxHeight: "280px", objectFit: "cover", display: "block"
-                  }} />
-                  <div style={{
-                    position: "absolute", bottom: 0, left: 0, right: 0, height: "80px",
-                    background: "linear-gradient(transparent, #0C0C0E)"
-                  }} />
+                  <img
+                    src={image}
+                    alt="Food"
+                    style={{
+                      width: "100%",
+                      maxHeight: "280px",
+                      objectFit: "cover",
+                      display: "block",
+                    }}
+                  />
+                  <div
+                    style={{
+                      position: "absolute",
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      height: "80px",
+                      background: "linear-gradient(transparent, #0C0C0E)",
+                    }}
+                  />
                   {!analysis && !loading && (
-                    <button onClick={resetCapture} style={{
-                      position: "absolute", top: "12px", right: "12px",
-                      width: "32px", height: "32px", borderRadius: "50%",
-                      background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)",
-                      border: "none", color: "#fff", cursor: "pointer", fontSize: "16px"
-                    }}>✕</button>
+                    <button
+                      onClick={resetCapture}
+                      style={{
+                        position: "absolute",
+                        top: "12px",
+                        right: "12px",
+                        width: "32px",
+                        height: "32px",
+                        borderRadius: "50%",
+                        background: "rgba(0,0,0,0.5)",
+                        backdropFilter: "blur(8px)",
+                        border: "none",
+                        color: "#fff",
+                        cursor: "pointer",
+                        fontSize: "16px",
+                      }}
+                    >
+                      ✕
+                    </button>
                   )}
                 </div>
               )}
@@ -987,27 +1751,62 @@ export default function App() {
               {/* Action / Loading */}
               {!analysis && !loading && (
                 <div style={{ padding: "20px", display: "flex", gap: "12px" }}>
-                  <button onClick={resetCapture} style={{
-                    padding: "14px 20px", borderRadius: "12px", cursor: "pointer",
-                    border: "1px solid rgba(255,255,255,0.1)", background: "transparent",
-                    color: "#fff", fontSize: "14px", fontFamily: "'DM Sans',sans-serif"
-                  }}>Retake</button>
-                  <button onClick={analyzeFood} style={{
-                    flex: 1, padding: "14px", borderRadius: "12px", border: "none", cursor: "pointer",
-                    background: "linear-gradient(135deg, #E8C872, #D4A843)", color: "#0C0C0E",
-                    fontSize: "14px", fontWeight: 700, fontFamily: "'DM Sans',sans-serif"
-                  }}>Analyze Meal →</button>
+                  <button
+                    onClick={resetCapture}
+                    style={{
+                      padding: "14px 20px",
+                      borderRadius: "12px",
+                      cursor: "pointer",
+                      border: "1px solid rgba(255,255,255,0.1)",
+                      background: "transparent",
+                      color: "#fff",
+                      fontSize: "14px",
+                      fontFamily: "'DM Sans',sans-serif",
+                    }}
+                  >
+                    Retake
+                  </button>
+                  <button
+                    onClick={analyzeFood}
+                    style={{
+                      flex: 1,
+                      padding: "14px",
+                      borderRadius: "12px",
+                      border: "none",
+                      cursor: "pointer",
+                      background: "linear-gradient(135deg, #E8C872, #D4A843)",
+                      color: "#0C0C0E",
+                      fontSize: "14px",
+                      fontWeight: 700,
+                      fontFamily: "'DM Sans',sans-serif",
+                    }}
+                  >
+                    Analyze Meal →
+                  </button>
                 </div>
               )}
 
               {loading && (
                 <div style={{ padding: "32px 20px", textAlign: "center" }}>
-                  <div style={{
-                    height: "3px", borderRadius: "2px", margin: "0 auto 16px", width: "200px",
-                    background: "linear-gradient(90deg, transparent, #E8C872, transparent)",
-                    backgroundSize: "200% 100%", animation: "shimmer 1.5s infinite"
-                  }} />
-                  <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "13px", animation: "pulse 2s infinite" }}>
+                  <div
+                    style={{
+                      height: "3px",
+                      borderRadius: "2px",
+                      margin: "0 auto 16px",
+                      width: "200px",
+                      background:
+                        "linear-gradient(90deg, transparent, #E8C872, transparent)",
+                      backgroundSize: "200% 100%",
+                      animation: "shimmer 1.5s infinite",
+                    }}
+                  />
+                  <p
+                    style={{
+                      color: "rgba(255,255,255,0.4)",
+                      fontSize: "13px",
+                      animation: "pulse 2s infinite",
+                    }}
+                  >
                     Analyzing your meal...
                   </p>
                 </div>
@@ -1015,12 +1814,32 @@ export default function App() {
 
               {error && (
                 <div style={{ padding: "20px", textAlign: "center" }}>
-                  <p style={{ color: "#E87272", fontSize: "13px", marginBottom: "12px" }}>{error}</p>
-                  <button onClick={() => { setError(null); }} style={{
-                    padding: "10px 24px", borderRadius: "10px", border: "1px solid rgba(232,114,114,0.3)",
-                    background: "transparent", color: "#E87272", cursor: "pointer",
-                    fontSize: "13px", fontFamily: "'DM Sans',sans-serif"
-                  }}>Try Again</button>
+                  <p
+                    style={{
+                      color: "#E87272",
+                      fontSize: "13px",
+                      marginBottom: "12px",
+                    }}
+                  >
+                    {error}
+                  </p>
+                  <button
+                    onClick={() => {
+                      setError(null);
+                    }}
+                    style={{
+                      padding: "10px 24px",
+                      borderRadius: "10px",
+                      border: "1px solid rgba(232,114,114,0.3)",
+                      background: "transparent",
+                      color: "#E87272",
+                      cursor: "pointer",
+                      fontSize: "13px",
+                      fontFamily: "'DM Sans',sans-serif",
+                    }}
+                  >
+                    Try Again
+                  </button>
                 </div>
               )}
 
@@ -1028,42 +1847,118 @@ export default function App() {
               {analysis && adjustedTotals && (
                 <div style={{ animation: "fadeSlideIn 0.4s ease-out" }}>
                   {/* Macro Rings */}
-                  <div style={{
-                    padding: "20px", display: "flex", justifyContent: "space-around",
-                    background: "rgba(255,255,255,0.015)", borderBottom: "1px solid rgba(255,255,255,0.04)"
-                  }}>
-                    <MacroRing value={adjustedTotals.calories} max={goals.calories} color="#E8C872" label="Calories" unit="kcal" />
-                    <MacroRing value={adjustedTotals.protein_g} max={goals.proteinG} color="#7BE0AD" label="Protein" unit="g" />
-                    <MacroRing value={adjustedTotals.carbs_g} max={goals.carbsG} color="#72B4E8" label="Carbs" unit="g" />
-                    <MacroRing value={adjustedTotals.fat_g} max={goals.fatG} color="#E87272" label="Fat" unit="g" />
+                  <div
+                    style={{
+                      padding: "20px",
+                      display: "flex",
+                      justifyContent: "space-around",
+                      background: "rgba(255,255,255,0.015)",
+                      borderBottom: "1px solid rgba(255,255,255,0.04)",
+                    }}
+                  >
+                    <MacroRing
+                      value={adjustedTotals.calories}
+                      max={goals.calories}
+                      color="#E8C872"
+                      label="Calories"
+                      unit="kcal"
+                    />
+                    <MacroRing
+                      value={adjustedTotals.protein_g}
+                      max={goals.proteinG}
+                      color="#7BE0AD"
+                      label="Protein"
+                      unit="g"
+                    />
+                    <MacroRing
+                      value={adjustedTotals.carbs_g}
+                      max={goals.carbsG}
+                      color="#72B4E8"
+                      label="Carbs"
+                      unit="g"
+                    />
+                    <MacroRing
+                      value={adjustedTotals.fat_g}
+                      max={goals.fatG}
+                      color="#E87272"
+                      label="Fat"
+                      unit="g"
+                    />
                   </div>
 
                   {/* Extra stats */}
-                  <div style={{ display: "flex", padding: "12px 20px", gap: "16px", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      padding: "12px 20px",
+                      gap: "16px",
+                      borderBottom: "1px solid rgba(255,255,255,0.04)",
+                    }}
+                  >
                     {adjustedTotals.fiber_g !== undefined && (
-                      <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.35)" }}>
-                        Fiber: <span style={{ color: "rgba(255,255,255,0.6)" }}>{adjustedTotals.fiber_g}g</span>
+                      <span
+                        style={{
+                          fontSize: "12px",
+                          color: "rgba(255,255,255,0.35)",
+                        }}
+                      >
+                        Fiber:{" "}
+                        <span style={{ color: "rgba(255,255,255,0.6)" }}>
+                          {adjustedTotals.fiber_g}g
+                        </span>
                       </span>
                     )}
                     {adjustedTotals.sugar_g !== undefined && (
-                      <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.35)" }}>
-                        Sugar: <span style={{ color: "rgba(255,255,255,0.6)" }}>{adjustedTotals.sugar_g}g</span>
+                      <span
+                        style={{
+                          fontSize: "12px",
+                          color: "rgba(255,255,255,0.35)",
+                        }}
+                      >
+                        Sugar:{" "}
+                        <span style={{ color: "rgba(255,255,255,0.6)" }}>
+                          {adjustedTotals.sugar_g}g
+                        </span>
                       </span>
                     )}
                   </div>
 
                   {/* Item Breakdown */}
                   <div>
-                    <div style={{ padding: "16px 20px 8px", display: "flex", alignItems: "baseline", gap: "8px" }}>
-                      <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.25)", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 500 }}>
+                    <div
+                      style={{
+                        padding: "16px 20px 8px",
+                        display: "flex",
+                        alignItems: "baseline",
+                        gap: "8px",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          color: "rgba(255,255,255,0.25)",
+                          textTransform: "uppercase",
+                          letterSpacing: "1px",
+                          fontWeight: 500,
+                        }}
+                      >
                         Breakdown
                       </span>
                       {!mealDetailMode && (
-                        <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.15)" }}>tap to adjust</span>
+                        <span
+                          style={{
+                            fontSize: "10px",
+                            color: "rgba(255,255,255,0.15)",
+                          }}
+                        >
+                          tap to adjust
+                        </span>
                       )}
                     </div>
                     {analysis.items.map((_, i) => {
-                      const item = adjustedItems ? adjustedItems[i] : analysis.items[i];
+                      const item = adjustedItems
+                        ? adjustedItems[i]
+                        : analysis.items[i];
                       return (
                         <ItemRow
                           key={i}
@@ -1072,14 +1967,22 @@ export default function App() {
                           editable={!mealDetailMode}
                           expanded={expandedItemIndex === i}
                           multiplier={itemAdjustments[i]?.multiplier ?? 1.0}
-                          onToggle={() => setExpandedItemIndex(expandedItemIndex === i ? null : i)}
-                          onMultiplierChange={(val) => updateItemMultiplier(i, val)}
+                          onToggle={() =>
+                            setExpandedItemIndex(
+                              expandedItemIndex === i ? null : i,
+                            )
+                          }
+                          onMultiplierChange={(val) =>
+                            updateItemMultiplier(i, val)
+                          }
                           onRemove={() => removeAnalysisItem(i)}
                         />
                       );
                     })}
                     {extraItems.map((item, i) => {
-                      const extraAdj = adjustedItems ? adjustedItems[analysis.items.length + i] : item;
+                      const extraAdj = adjustedItems
+                        ? adjustedItems[analysis.items.length + i]
+                        : item;
                       return (
                         <ItemRow
                           key={`extra-${i}`}
@@ -1087,9 +1990,17 @@ export default function App() {
                           index={analysis.items.length + i}
                           editable={!mealDetailMode}
                           expanded={expandedExtraIndex === i}
-                          multiplier={extraItemAdjustments[i]?.multiplier ?? 1.0}
-                          onToggle={() => setExpandedExtraIndex(expandedExtraIndex === i ? null : i)}
-                          onMultiplierChange={(val) => updateExtraItemMultiplier(i, val)}
+                          multiplier={
+                            extraItemAdjustments[i]?.multiplier ?? 1.0
+                          }
+                          onToggle={() =>
+                            setExpandedExtraIndex(
+                              expandedExtraIndex === i ? null : i,
+                            )
+                          }
+                          onMultiplierChange={(val) =>
+                            updateExtraItemMultiplier(i, val)
+                          }
                           onRemove={() => removeExtraItem(i)}
                         />
                       );
@@ -1097,109 +2008,367 @@ export default function App() {
                     {!mealDetailMode && (
                       <div style={{ padding: "12px 20px" }}>
                         {!addingExtraItem ? (
-                          <button onClick={() => { setAddingExtraItem(true); setManualQuery(""); setManualResults([]); setSelectedFood(null); }} style={{
-                            width: "100%", padding: "10px", borderRadius: "10px", border: "1px dashed rgba(255,255,255,0.12)",
-                            background: "transparent", color: "rgba(255,255,255,0.35)", cursor: "pointer",
-                            fontSize: "13px", fontFamily: "'DM Sans',sans-serif",
-                          }}>+ Add Item</button>
+                          <button
+                            onClick={() => {
+                              setAddingExtraItem(true);
+                              setManualQuery("");
+                              setManualResults([]);
+                              setSelectedFood(null);
+                            }}
+                            style={{
+                              width: "100%",
+                              padding: "10px",
+                              borderRadius: "10px",
+                              border: "1px dashed rgba(255,255,255,0.12)",
+                              background: "transparent",
+                              color: "rgba(255,255,255,0.35)",
+                              cursor: "pointer",
+                              fontSize: "13px",
+                              fontFamily: "'DM Sans',sans-serif",
+                            }}
+                          >
+                            + Add Item
+                          </button>
                         ) : (
                           <div>
-                            <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+                            <div
+                              style={{
+                                display: "flex",
+                                gap: "8px",
+                                marginBottom: "12px",
+                              }}
+                            >
                               <input
                                 type="text"
                                 value={manualQuery}
-                                onChange={(e) => handleManualSearch(e.target.value)}
+                                onChange={(e) =>
+                                  handleManualSearch(e.target.value)
+                                }
                                 placeholder="Search foods..."
                                 autoFocus
                                 style={{
-                                  flex: 1, padding: "10px 14px", borderRadius: "10px",
-                                  border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)",
-                                  color: "#fff", fontSize: "13px", fontFamily: "'DM Sans',sans-serif", outline: "none",
+                                  flex: 1,
+                                  padding: "10px 14px",
+                                  borderRadius: "10px",
+                                  border: "1px solid rgba(255,255,255,0.1)",
+                                  background: "rgba(255,255,255,0.04)",
+                                  color: "#fff",
+                                  fontSize: "13px",
+                                  fontFamily: "'DM Sans',sans-serif",
+                                  outline: "none",
                                 }}
                               />
-                              <button onClick={() => { setAddingExtraItem(false); setManualQuery(""); setManualResults([]); setSelectedFood(null); }} style={{
-                                padding: "10px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.1)",
-                                background: "transparent", color: "rgba(255,255,255,0.4)", cursor: "pointer",
-                                fontSize: "14px", fontFamily: "'DM Sans',sans-serif",
-                              }}>✕</button>
+                              <button
+                                onClick={() => {
+                                  setAddingExtraItem(false);
+                                  setManualQuery("");
+                                  setManualResults([]);
+                                  setSelectedFood(null);
+                                }}
+                                style={{
+                                  padding: "10px",
+                                  borderRadius: "10px",
+                                  border: "1px solid rgba(255,255,255,0.1)",
+                                  background: "transparent",
+                                  color: "rgba(255,255,255,0.4)",
+                                  cursor: "pointer",
+                                  fontSize: "14px",
+                                  fontFamily: "'DM Sans',sans-serif",
+                                }}
+                              >
+                                ✕
+                              </button>
                             </div>
                             {manualSearching && (
-                              <div style={{
-                                height: "3px", borderRadius: "2px", marginBottom: "12px", width: "100%",
-                                background: "linear-gradient(90deg, transparent, #E8C872, transparent)",
-                                backgroundSize: "200% 100%", animation: "shimmer 1.5s infinite",
-                              }} />
+                              <div
+                                style={{
+                                  height: "3px",
+                                  borderRadius: "2px",
+                                  marginBottom: "12px",
+                                  width: "100%",
+                                  background:
+                                    "linear-gradient(90deg, transparent, #E8C872, transparent)",
+                                  backgroundSize: "200% 100%",
+                                  animation: "shimmer 1.5s infinite",
+                                }}
+                              />
                             )}
                             {manualResults.length > 0 && !selectedFood && (
                               <div style={{ marginBottom: "12px" }}>
                                 {manualResults.map((food, i) => (
-                                  <div key={i} onClick={() => selectFood(food)} style={{
-                                    padding: "10px 12px", marginBottom: "6px", borderRadius: "8px", cursor: "pointer",
-                                    background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)",
-                                  }}>
-                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "3px" }}>
-                                      <span style={{ fontSize: "12px", fontWeight: 500, color: "#fff" }}>{food.name}</span>
-                                      <span style={{ fontSize: "11px", color: "#E8C872", fontWeight: 600 }}>{Math.round(food.per100g?.calories || food.calories)} cal</span>
+                                  <div
+                                    key={i}
+                                    onClick={() => selectFood(food)}
+                                    style={{
+                                      padding: "10px 12px",
+                                      marginBottom: "6px",
+                                      borderRadius: "8px",
+                                      cursor: "pointer",
+                                      background: "rgba(255,255,255,0.02)",
+                                      border:
+                                        "1px solid rgba(255,255,255,0.06)",
+                                    }}
+                                  >
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        alignItems: "baseline",
+                                        marginBottom: "3px",
+                                      }}
+                                    >
+                                      <span
+                                        style={{
+                                          fontSize: "12px",
+                                          fontWeight: 500,
+                                          color: "#fff",
+                                        }}
+                                      >
+                                        {food.name}
+                                      </span>
+                                      <span
+                                        style={{
+                                          fontSize: "11px",
+                                          color: "#E8C872",
+                                          fontWeight: 600,
+                                        }}
+                                      >
+                                        {Math.round(
+                                          food.per100g?.calories ||
+                                            food.calories,
+                                        )}{" "}
+                                        cal
+                                      </span>
                                     </div>
-                                    <div style={{ display: "flex", gap: "8px", fontSize: "10px", color: "rgba(255,255,255,0.3)" }}>
-                                      <span style={{
-                                        padding: "1px 5px", borderRadius: "3px", fontSize: "8px", fontWeight: 600,
-                                        background: food.source === "usda" ? "rgba(123,224,173,0.1)" : "rgba(114,180,232,0.1)",
-                                        color: food.source === "usda" ? "#7BE0AD" : "#72B4E8",
-                                        textTransform: "uppercase",
-                                      }}>{food.source === "usda" ? "USDA" : "OFF"}</span>
-                                      <span>P {+(food.per100g?.protein_g ?? food.protein_g).toFixed(1)}g</span>
-                                      <span>C {+(food.per100g?.carbs_g ?? food.carbs_g).toFixed(1)}g</span>
-                                      <span>F {+(food.per100g?.fat_g ?? food.fat_g).toFixed(1)}g</span>
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        gap: "8px",
+                                        fontSize: "10px",
+                                        color: "rgba(255,255,255,0.3)",
+                                      }}
+                                    >
+                                      <span
+                                        style={{
+                                          padding: "1px 5px",
+                                          borderRadius: "3px",
+                                          fontSize: "8px",
+                                          fontWeight: 600,
+                                          background:
+                                            food.source === "usda"
+                                              ? "rgba(123,224,173,0.1)"
+                                              : "rgba(114,180,232,0.1)",
+                                          color:
+                                            food.source === "usda"
+                                              ? "#7BE0AD"
+                                              : "#72B4E8",
+                                          textTransform: "uppercase",
+                                        }}
+                                      >
+                                        {food.source === "usda"
+                                          ? "USDA"
+                                          : "OFF"}
+                                      </span>
+                                      <span>
+                                        P{" "}
+                                        {
+                                          +(
+                                            food.per100g?.protein_g ??
+                                            food.protein_g
+                                          ).toFixed(1)
+                                        }
+                                        g
+                                      </span>
+                                      <span>
+                                        C{" "}
+                                        {
+                                          +(
+                                            food.per100g?.carbs_g ??
+                                            food.carbs_g
+                                          ).toFixed(1)
+                                        }
+                                        g
+                                      </span>
+                                      <span>
+                                        F{" "}
+                                        {
+                                          +(
+                                            food.per100g?.fat_g ?? food.fat_g
+                                          ).toFixed(1)
+                                        }
+                                        g
+                                      </span>
                                     </div>
                                   </div>
                                 ))}
                               </div>
                             )}
                             {selectedFood && scaledFoodMacros && (
-                              <div style={{
-                                padding: "14px", borderRadius: "10px",
-                                background: "rgba(232,200,114,0.04)", border: "1px solid rgba(232,200,114,0.1)",
-                              }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "10px" }}>
-                                  <span style={{ fontSize: "13px", fontWeight: 600, color: "#fff" }}>{selectedFood.name}</span>
-                                  <button onClick={() => { setSelectedFood(null); setManualResults([]); setManualQuery(""); }} style={{
-                                    background: "none", border: "none", color: "rgba(255,255,255,0.3)", cursor: "pointer", fontSize: "12px",
-                                  }}>✕</button>
+                              <div
+                                style={{
+                                  padding: "14px",
+                                  borderRadius: "10px",
+                                  background: "rgba(232,200,114,0.04)",
+                                  border: "1px solid rgba(232,200,114,0.1)",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "baseline",
+                                    marginBottom: "10px",
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      fontSize: "13px",
+                                      fontWeight: 600,
+                                      color: "#fff",
+                                    }}
+                                  >
+                                    {selectedFood.name}
+                                  </span>
+                                  <button
+                                    onClick={() => {
+                                      setSelectedFood(null);
+                                      setManualResults([]);
+                                      setManualQuery("");
+                                    }}
+                                    style={{
+                                      background: "none",
+                                      border: "none",
+                                      color: "rgba(255,255,255,0.3)",
+                                      cursor: "pointer",
+                                      fontSize: "12px",
+                                    }}
+                                  >
+                                    ✕
+                                  </button>
                                 </div>
-                                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "12px" }}>
-                                  <label style={{ fontSize: "11px", color: "rgba(255,255,255,0.4)" }}>Amount:</label>
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "10px",
+                                    marginBottom: "12px",
+                                  }}
+                                >
+                                  <label
+                                    style={{
+                                      fontSize: "11px",
+                                      color: "rgba(255,255,255,0.4)",
+                                    }}
+                                  >
+                                    Amount:
+                                  </label>
                                   <input
                                     type="number"
                                     value={manualGrams}
-                                    onChange={(e) => setManualGrams(Math.max(1, parseInt(e.target.value) || 1))}
+                                    onChange={(e) =>
+                                      setManualGrams(
+                                        Math.max(
+                                          1,
+                                          parseInt(e.target.value) || 1,
+                                        ),
+                                      )
+                                    }
                                     style={{
-                                      width: "70px", padding: "6px 10px", borderRadius: "8px",
-                                      border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)",
-                                      color: "#fff", fontSize: "13px", fontWeight: 600, textAlign: "center",
-                                      fontFamily: "'DM Sans',sans-serif", outline: "none",
+                                      width: "70px",
+                                      padding: "6px 10px",
+                                      borderRadius: "8px",
+                                      border:
+                                        "1px solid rgba(255,255,255,0.12)",
+                                      background: "rgba(255,255,255,0.06)",
+                                      color: "#fff",
+                                      fontSize: "13px",
+                                      fontWeight: 600,
+                                      textAlign: "center",
+                                      fontFamily: "'DM Sans',sans-serif",
+                                      outline: "none",
                                     }}
                                   />
-                                  <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.4)" }}>grams</span>
+                                  <span
+                                    style={{
+                                      fontSize: "12px",
+                                      color: "rgba(255,255,255,0.4)",
+                                    }}
+                                  >
+                                    grams
+                                  </span>
                                 </div>
-                                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px" }}>
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    marginBottom: "12px",
+                                  }}
+                                >
                                   {[
-                                    { label: "Cal", value: scaledFoodMacros.calories, color: "#E8C872" },
-                                    { label: "P", value: `${scaledFoodMacros.protein_g}g`, color: "#7BE0AD" },
-                                    { label: "C", value: `${scaledFoodMacros.carbs_g}g`, color: "#72B4E8" },
-                                    { label: "F", value: `${scaledFoodMacros.fat_g}g`, color: "#E87272" },
+                                    {
+                                      label: "Cal",
+                                      value: scaledFoodMacros.calories,
+                                      color: "#E8C872",
+                                    },
+                                    {
+                                      label: "P",
+                                      value: `${scaledFoodMacros.protein_g}g`,
+                                      color: "#7BE0AD",
+                                    },
+                                    {
+                                      label: "C",
+                                      value: `${scaledFoodMacros.carbs_g}g`,
+                                      color: "#72B4E8",
+                                    },
+                                    {
+                                      label: "F",
+                                      value: `${scaledFoodMacros.fat_g}g`,
+                                      color: "#E87272",
+                                    },
                                   ].map(({ label, value, color }) => (
-                                    <div key={label} style={{ textAlign: "center" }}>
-                                      <div style={{ fontSize: "14px", fontWeight: 700, color }}>{value}</div>
-                                      <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.3)", textTransform: "uppercase" }}>{label}</div>
+                                    <div
+                                      key={label}
+                                      style={{ textAlign: "center" }}
+                                    >
+                                      <div
+                                        style={{
+                                          fontSize: "14px",
+                                          fontWeight: 700,
+                                          color,
+                                        }}
+                                      >
+                                        {value}
+                                      </div>
+                                      <div
+                                        style={{
+                                          fontSize: "9px",
+                                          color: "rgba(255,255,255,0.3)",
+                                          textTransform: "uppercase",
+                                        }}
+                                      >
+                                        {label}
+                                      </div>
                                     </div>
                                   ))}
                                 </div>
-                                <button onClick={addExtraItemToScan} style={{
-                                  width: "100%", padding: "8px", borderRadius: "8px", border: "none", cursor: "pointer",
-                                  background: "linear-gradient(135deg, #E8C872, #D4A843)", color: "#0C0C0E",
-                                  fontSize: "12px", fontWeight: 700, fontFamily: "'DM Sans',sans-serif",
-                                }}>+ Add</button>
+                                <button
+                                  onClick={addExtraItemToScan}
+                                  style={{
+                                    width: "100%",
+                                    padding: "8px",
+                                    borderRadius: "8px",
+                                    border: "none",
+                                    cursor: "pointer",
+                                    background:
+                                      "linear-gradient(135deg, #E8C872, #D4A843)",
+                                    color: "#0C0C0E",
+                                    fontSize: "12px",
+                                    fontWeight: 700,
+                                    fontFamily: "'DM Sans',sans-serif",
+                                  }}
+                                >
+                                  + Add
+                                </button>
                               </div>
                             )}
                           </div>
@@ -1210,11 +2379,23 @@ export default function App() {
 
                   {/* Meal Notes */}
                   {analysis.meal_notes && (
-                    <div style={{
-                      margin: "16px 20px", padding: "14px 16px", borderRadius: "10px",
-                      background: "rgba(232,200,114,0.04)", border: "1px solid rgba(232,200,114,0.08)"
-                    }}>
-                      <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.5)", lineHeight: 1.6, fontStyle: "italic" }}>
+                    <div
+                      style={{
+                        margin: "16px 20px",
+                        padding: "14px 16px",
+                        borderRadius: "10px",
+                        background: "rgba(232,200,114,0.04)",
+                        border: "1px solid rgba(232,200,114,0.08)",
+                      }}
+                    >
+                      <p
+                        style={{
+                          fontSize: "12px",
+                          color: "rgba(255,255,255,0.5)",
+                          lineHeight: 1.6,
+                          fontStyle: "italic",
+                        }}
+                      >
                         💡 {analysis.meal_notes}
                       </p>
                     </div>
@@ -1222,36 +2403,98 @@ export default function App() {
 
                   {/* Meal Type Picker (only for fresh scans) */}
                   {!mealDetailMode && (
-                    <MealTypePicker value={selectedMealType} onChange={setSelectedMealType} />
+                    <MealTypePicker
+                      value={selectedMealType}
+                      onChange={setSelectedMealType}
+                    />
                   )}
 
                   {/* Actions */}
-                  <div style={{ padding: "16px 20px 32px", display: "flex", gap: "12px" }}>
+                  <div
+                    style={{
+                      padding: "16px 20px 32px",
+                      display: "flex",
+                      gap: "12px",
+                    }}
+                  >
                     {mealDetailMode ? (
                       <>
-                        <button onClick={() => { setMealDetailMode(false); setAnalysis(null); setImage(null); setView("daily"); }} style={{
-                          flex: 1, padding: "14px", borderRadius: "12px", cursor: "pointer",
-                          border: "1px solid rgba(255,255,255,0.1)", background: "transparent",
-                          color: "#fff", fontSize: "13px", fontFamily: "'DM Sans',sans-serif"
-                        }}>← Back to Log</button>
-                        <button onClick={resetCapture} style={{
-                          flex: 1, padding: "14px", borderRadius: "12px", border: "none", cursor: "pointer",
-                          background: "linear-gradient(135deg, #E8C872, #D4A843)", color: "#0C0C0E",
-                          fontSize: "13px", fontWeight: 700, fontFamily: "'DM Sans',sans-serif"
-                        }}>New Scan</button>
+                        <button
+                          onClick={() => {
+                            setMealDetailMode(false);
+                            setAnalysis(null);
+                            setImage(null);
+                            setView("daily");
+                          }}
+                          style={{
+                            flex: 1,
+                            padding: "14px",
+                            borderRadius: "12px",
+                            cursor: "pointer",
+                            border: "1px solid rgba(255,255,255,0.1)",
+                            background: "transparent",
+                            color: "#fff",
+                            fontSize: "13px",
+                            fontFamily: "'DM Sans',sans-serif",
+                          }}
+                        >
+                          ← Back to Log
+                        </button>
+                        <button
+                          onClick={resetCapture}
+                          style={{
+                            flex: 1,
+                            padding: "14px",
+                            borderRadius: "12px",
+                            border: "none",
+                            cursor: "pointer",
+                            background:
+                              "linear-gradient(135deg, #E8C872, #D4A843)",
+                            color: "#0C0C0E",
+                            fontSize: "13px",
+                            fontWeight: 700,
+                            fontFamily: "'DM Sans',sans-serif",
+                          }}
+                        >
+                          New Scan
+                        </button>
                       </>
                     ) : (
                       <>
-                        <button onClick={resetCapture} style={{
-                          flex: 1, padding: "14px", borderRadius: "12px", cursor: "pointer",
-                          border: "1px solid rgba(255,255,255,0.1)", background: "transparent",
-                          color: "#fff", fontSize: "13px", fontFamily: "'DM Sans',sans-serif"
-                        }}>New Scan</button>
-                        <button onClick={addToDaily} style={{
-                          flex: 1, padding: "14px", borderRadius: "12px", border: "none", cursor: "pointer",
-                          background: "linear-gradient(135deg, #7BE0AD, #4CB97A)", color: "#0C0C0E",
-                          fontSize: "13px", fontWeight: 700, fontFamily: "'DM Sans',sans-serif"
-                        }}>+ Add to Log</button>
+                        <button
+                          onClick={resetCapture}
+                          style={{
+                            flex: 1,
+                            padding: "14px",
+                            borderRadius: "12px",
+                            cursor: "pointer",
+                            border: "1px solid rgba(255,255,255,0.1)",
+                            background: "transparent",
+                            color: "#fff",
+                            fontSize: "13px",
+                            fontFamily: "'DM Sans',sans-serif",
+                          }}
+                        >
+                          New Scan
+                        </button>
+                        <button
+                          onClick={addToDaily}
+                          style={{
+                            flex: 1,
+                            padding: "14px",
+                            borderRadius: "12px",
+                            border: "none",
+                            cursor: "pointer",
+                            background:
+                              "linear-gradient(135deg, #7BE0AD, #4CB97A)",
+                            color: "#0C0C0E",
+                            fontSize: "13px",
+                            fontWeight: 700,
+                            fontFamily: "'DM Sans',sans-serif",
+                          }}
+                        >
+                          + Add to Log
+                        </button>
                       </>
                     )}
                   </div>
@@ -1274,55 +2517,149 @@ export default function App() {
                 onChange={(e) => handleManualSearch(e.target.value)}
                 placeholder="Search foods (e.g. chicken breast)"
                 style={{
-                  flex: 1, padding: "12px 16px", borderRadius: "12px",
-                  border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.04)",
-                  color: "#fff", fontSize: "14px", fontFamily: "'DM Sans',sans-serif",
+                  flex: 1,
+                  padding: "12px 16px",
+                  borderRadius: "12px",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  background: "rgba(255,255,255,0.04)",
+                  color: "#fff",
+                  fontSize: "14px",
+                  fontFamily: "'DM Sans',sans-serif",
                   outline: "none",
                 }}
               />
-              <button onClick={resetCapture} style={{
-                padding: "12px", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.1)",
-                background: "transparent", color: "rgba(255,255,255,0.4)", cursor: "pointer",
-                fontSize: "16px", fontFamily: "'DM Sans',sans-serif",
-              }}>✕</button>
+              <button
+                onClick={resetCapture}
+                style={{
+                  padding: "12px",
+                  borderRadius: "12px",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  background: "transparent",
+                  color: "rgba(255,255,255,0.4)",
+                  cursor: "pointer",
+                  fontSize: "16px",
+                  fontFamily: "'DM Sans',sans-serif",
+                }}
+              >
+                ✕
+              </button>
             </div>
 
             {/* Searching indicator */}
             {manualSearching && (
-              <div style={{
-                height: "3px", borderRadius: "2px", marginBottom: "16px", width: "100%",
-                background: "linear-gradient(90deg, transparent, #E8C872, transparent)",
-                backgroundSize: "200% 100%", animation: "shimmer 1.5s infinite",
-              }} />
+              <div
+                style={{
+                  height: "3px",
+                  borderRadius: "2px",
+                  marginBottom: "16px",
+                  width: "100%",
+                  background:
+                    "linear-gradient(90deg, transparent, #E8C872, transparent)",
+                  backgroundSize: "200% 100%",
+                  animation: "shimmer 1.5s infinite",
+                }}
+              />
             )}
 
             {/* Search results */}
             {manualResults.length > 0 && !selectedFood && (
               <div style={{ marginBottom: "16px" }}>
-                <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.25)", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 500 }}>
+                <span
+                  style={{
+                    fontSize: "11px",
+                    color: "rgba(255,255,255,0.25)",
+                    textTransform: "uppercase",
+                    letterSpacing: "1px",
+                    fontWeight: 500,
+                  }}
+                >
                   Results
                 </span>
                 {manualResults.map((food, i) => (
-                  <div key={i} onClick={() => selectFood(food)} style={{
-                    padding: "12px 14px", marginTop: "8px", borderRadius: "10px", cursor: "pointer",
-                    background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)",
-                    transition: "background 0.2s",
-                  }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "4px" }}>
-                      <span style={{ fontSize: "13px", fontWeight: 500, color: "#fff" }}>{food.name}</span>
-                      <span style={{ fontSize: "12px", color: "#E8C872", fontWeight: 600 }}>{Math.round(food.per100g?.calories || food.calories)} cal</span>
+                  <div
+                    key={i}
+                    onClick={() => selectFood(food)}
+                    style={{
+                      padding: "12px 14px",
+                      marginTop: "8px",
+                      borderRadius: "10px",
+                      cursor: "pointer",
+                      background: "rgba(255,255,255,0.02)",
+                      border: "1px solid rgba(255,255,255,0.06)",
+                      transition: "background 0.2s",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "baseline",
+                        marginBottom: "4px",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "13px",
+                          fontWeight: 500,
+                          color: "#fff",
+                        }}
+                      >
+                        {food.name}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "12px",
+                          color: "#E8C872",
+                          fontWeight: 600,
+                        }}
+                      >
+                        {Math.round(food.per100g?.calories || food.calories)}{" "}
+                        cal
+                      </span>
                     </div>
-                    <div style={{ display: "flex", gap: "10px", fontSize: "11px", color: "rgba(255,255,255,0.3)" }}>
-                      <span style={{
-                        padding: "1px 6px", borderRadius: "4px", fontSize: "9px", fontWeight: 600,
-                        background: food.source === "usda" ? "rgba(123,224,173,0.1)" : "rgba(114,180,232,0.1)",
-                        color: food.source === "usda" ? "#7BE0AD" : "#72B4E8",
-                        textTransform: "uppercase",
-                      }}>{food.source === "usda" ? "USDA" : "OFF"}</span>
-                      <span>{Math.round(food.servingSize)}{food.servingUnit} serving</span>
-                      <span>P {+(food.per100g?.protein_g ?? food.protein_g).toFixed(1)}g</span>
-                      <span>C {+(food.per100g?.carbs_g ?? food.carbs_g).toFixed(1)}g</span>
-                      <span>F {+(food.per100g?.fat_g ?? food.fat_g).toFixed(1)}g</span>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "10px",
+                        fontSize: "11px",
+                        color: "rgba(255,255,255,0.3)",
+                      }}
+                    >
+                      <span
+                        style={{
+                          padding: "1px 6px",
+                          borderRadius: "4px",
+                          fontSize: "9px",
+                          fontWeight: 600,
+                          background:
+                            food.source === "usda"
+                              ? "rgba(123,224,173,0.1)"
+                              : "rgba(114,180,232,0.1)",
+                          color: food.source === "usda" ? "#7BE0AD" : "#72B4E8",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        {food.source === "usda" ? "USDA" : "OFF"}
+                      </span>
+                      <span>
+                        {Math.round(food.servingSize)}
+                        {food.servingUnit} serving
+                      </span>
+                      <span>
+                        P{" "}
+                        {
+                          +(food.per100g?.protein_g ?? food.protein_g).toFixed(
+                            1,
+                          )
+                        }
+                        g
+                      </span>
+                      <span>
+                        C {+(food.per100g?.carbs_g ?? food.carbs_g).toFixed(1)}g
+                      </span>
+                      <span>
+                        F {+(food.per100g?.fat_g ?? food.fat_g).toFixed(1)}g
+                      </span>
                     </div>
                   </div>
                 ))}
@@ -1331,58 +2668,163 @@ export default function App() {
 
             {/* Selected food panel with gram input */}
             {selectedFood && scaledFoodMacros && (
-              <div style={{
-                marginBottom: "16px", padding: "16px", borderRadius: "12px",
-                background: "rgba(232,200,114,0.04)", border: "1px solid rgba(232,200,114,0.1)",
-              }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "12px" }}>
-                  <span style={{ fontSize: "14px", fontWeight: 600, color: "#fff" }}>{selectedFood.name}</span>
-                  <button onClick={() => { setSelectedFood(null); setManualResults([]); setManualQuery(""); }} style={{
-                    background: "none", border: "none", color: "rgba(255,255,255,0.3)", cursor: "pointer", fontSize: "14px",
-                  }}>✕</button>
+              <div
+                style={{
+                  marginBottom: "16px",
+                  padding: "16px",
+                  borderRadius: "12px",
+                  background: "rgba(232,200,114,0.04)",
+                  border: "1px solid rgba(232,200,114,0.1)",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "baseline",
+                    marginBottom: "12px",
+                  }}
+                >
+                  <span
+                    style={{ fontSize: "14px", fontWeight: 600, color: "#fff" }}
+                  >
+                    {selectedFood.name}
+                  </span>
+                  <button
+                    onClick={() => {
+                      setSelectedFood(null);
+                      setManualResults([]);
+                      setManualQuery("");
+                    }}
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "rgba(255,255,255,0.3)",
+                      cursor: "pointer",
+                      fontSize: "14px",
+                    }}
+                  >
+                    ✕
+                  </button>
                 </div>
                 {/* Gram input */}
-                <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "14px" }}>
-                  <label style={{ fontSize: "12px", color: "rgba(255,255,255,0.4)" }}>Amount:</label>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "12px",
+                    marginBottom: "14px",
+                  }}
+                >
+                  <label
+                    style={{ fontSize: "12px", color: "rgba(255,255,255,0.4)" }}
+                  >
+                    Amount:
+                  </label>
                   <input
                     type="number"
                     value={manualGrams}
-                    onChange={(e) => setManualGrams(Math.max(1, parseInt(e.target.value) || 1))}
+                    onChange={(e) =>
+                      setManualGrams(Math.max(1, parseInt(e.target.value) || 1))
+                    }
                     style={{
-                      width: "80px", padding: "8px 12px", borderRadius: "8px",
-                      border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.06)",
-                      color: "#fff", fontSize: "14px", fontWeight: 600, textAlign: "center",
-                      fontFamily: "'DM Sans',sans-serif", outline: "none",
+                      width: "80px",
+                      padding: "8px 12px",
+                      borderRadius: "8px",
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      background: "rgba(255,255,255,0.06)",
+                      color: "#fff",
+                      fontSize: "14px",
+                      fontWeight: 600,
+                      textAlign: "center",
+                      fontFamily: "'DM Sans',sans-serif",
+                      outline: "none",
                     }}
                   />
-                  <span style={{ fontSize: "13px", color: "rgba(255,255,255,0.4)" }}>grams</span>
+                  <span
+                    style={{ fontSize: "13px", color: "rgba(255,255,255,0.4)" }}
+                  >
+                    grams
+                  </span>
                 </div>
                 {/* Scaled macros */}
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "14px" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginBottom: "14px",
+                  }}
+                >
                   {[
-                    { label: "Cal", value: scaledFoodMacros.calories, color: "#E8C872" },
-                    { label: "Protein", value: `${scaledFoodMacros.protein_g}g`, color: "#7BE0AD" },
-                    { label: "Carbs", value: `${scaledFoodMacros.carbs_g}g`, color: "#72B4E8" },
-                    { label: "Fat", value: `${scaledFoodMacros.fat_g}g`, color: "#E87272" },
+                    {
+                      label: "Cal",
+                      value: scaledFoodMacros.calories,
+                      color: "#E8C872",
+                    },
+                    {
+                      label: "Protein",
+                      value: `${scaledFoodMacros.protein_g}g`,
+                      color: "#7BE0AD",
+                    },
+                    {
+                      label: "Carbs",
+                      value: `${scaledFoodMacros.carbs_g}g`,
+                      color: "#72B4E8",
+                    },
+                    {
+                      label: "Fat",
+                      value: `${scaledFoodMacros.fat_g}g`,
+                      color: "#E87272",
+                    },
                   ].map(({ label, value, color }) => (
                     <div key={label} style={{ textAlign: "center" }}>
-                      <div style={{ fontSize: "16px", fontWeight: 700, color }}>{value}</div>
-                      <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.3)", textTransform: "uppercase" }}>{label}</div>
+                      <div style={{ fontSize: "16px", fontWeight: 700, color }}>
+                        {value}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "10px",
+                          color: "rgba(255,255,255,0.3)",
+                          textTransform: "uppercase",
+                        }}
+                      >
+                        {label}
+                      </div>
                     </div>
                   ))}
                 </div>
-                <button onClick={addManualItem} style={{
-                  width: "100%", padding: "10px", borderRadius: "10px", border: "none", cursor: "pointer",
-                  background: "linear-gradient(135deg, #E8C872, #D4A843)", color: "#0C0C0E",
-                  fontSize: "13px", fontWeight: 700, fontFamily: "'DM Sans',sans-serif",
-                }}>+ Add Item</button>
+                <button
+                  onClick={addManualItem}
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    borderRadius: "10px",
+                    border: "none",
+                    cursor: "pointer",
+                    background: "linear-gradient(135deg, #E8C872, #D4A843)",
+                    color: "#0C0C0E",
+                    fontSize: "13px",
+                    fontWeight: 700,
+                    fontFamily: "'DM Sans',sans-serif",
+                  }}
+                >
+                  + Add Item
+                </button>
               </div>
             )}
 
             {/* Manual items list */}
             {manualItems.length > 0 && (
               <div style={{ marginBottom: "16px" }}>
-                <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.25)", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 500 }}>
+                <span
+                  style={{
+                    fontSize: "11px",
+                    color: "rgba(255,255,255,0.25)",
+                    textTransform: "uppercase",
+                    letterSpacing: "1px",
+                    fontWeight: 500,
+                  }}
+                >
                   Your items ({manualItems.length})
                 </span>
                 {manualItems.map((item, i) => (
@@ -1393,28 +2835,66 @@ export default function App() {
                     editable={true}
                     expanded={expandedManualIndex === i}
                     multiplier={1.0}
-                    onToggle={() => setExpandedManualIndex(expandedManualIndex === i ? null : i)}
+                    onToggle={() =>
+                      setExpandedManualIndex(
+                        expandedManualIndex === i ? null : i,
+                      )
+                    }
                     onMultiplierChange={null}
-                    onRemove={() => setManualItems(prev => prev.filter((_, j) => j !== i))}
+                    onRemove={() =>
+                      setManualItems((prev) => prev.filter((_, j) => j !== i))
+                    }
                   />
                 ))}
                 {/* Running totals — MacroRings */}
                 {(() => {
-                  const t = manualItems.reduce((acc, it) => ({
-                    calories: acc.calories + it.calories,
-                    protein_g: +(acc.protein_g + it.protein_g).toFixed(1),
-                    carbs_g: +(acc.carbs_g + it.carbs_g).toFixed(1),
-                    fat_g: +(acc.fat_g + it.fat_g).toFixed(1),
-                  }), { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 });
+                  const t = manualItems.reduce(
+                    (acc, it) => ({
+                      calories: acc.calories + it.calories,
+                      protein_g: +(acc.protein_g + it.protein_g).toFixed(1),
+                      carbs_g: +(acc.carbs_g + it.carbs_g).toFixed(1),
+                      fat_g: +(acc.fat_g + it.fat_g).toFixed(1),
+                    }),
+                    { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+                  );
                   return (
-                    <div style={{
-                      display: "flex", justifyContent: "space-around", padding: "12px 0", marginTop: "8px",
-                      borderTop: "1px solid rgba(255,255,255,0.06)",
-                    }}>
-                      <MacroRing value={t.calories} max={goals.calories} color="#E8C872" label="Calories" unit="kcal" />
-                      <MacroRing value={t.protein_g} max={goals.proteinG} color="#7BE0AD" label="Protein" unit="g" />
-                      <MacroRing value={t.carbs_g} max={goals.carbsG} color="#72B4E8" label="Carbs" unit="g" />
-                      <MacroRing value={t.fat_g} max={goals.fatG} color="#E87272" label="Fat" unit="g" />
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-around",
+                        padding: "12px 0",
+                        marginTop: "8px",
+                        borderTop: "1px solid rgba(255,255,255,0.06)",
+                      }}
+                    >
+                      <MacroRing
+                        value={t.calories}
+                        max={goals.calories}
+                        color="#E8C872"
+                        label="Calories"
+                        unit="kcal"
+                      />
+                      <MacroRing
+                        value={t.protein_g}
+                        max={goals.proteinG}
+                        color="#7BE0AD"
+                        label="Protein"
+                        unit="g"
+                      />
+                      <MacroRing
+                        value={t.carbs_g}
+                        max={goals.carbsG}
+                        color="#72B4E8"
+                        label="Carbs"
+                        unit="g"
+                      />
+                      <MacroRing
+                        value={t.fat_g}
+                        max={goals.fatG}
+                        color="#E87272"
+                        label="Fat"
+                        unit="g"
+                      />
                     </div>
                   );
                 })()}
@@ -1424,18 +2904,42 @@ export default function App() {
             {/* Meal type + save */}
             {manualItems.length > 0 && (
               <>
-                <MealTypePicker value={selectedMealType} onChange={setSelectedMealType} />
-                <button onClick={addManualToDaily} style={{
-                  width: "100%", padding: "14px", borderRadius: "12px", border: "none", cursor: "pointer",
-                  background: "linear-gradient(135deg, #7BE0AD, #4CB97A)", color: "#0C0C0E",
-                  fontSize: "14px", fontWeight: 700, fontFamily: "'DM Sans',sans-serif",
-                  marginTop: "8px",
-                }}>Add to Log</button>
+                <MealTypePicker
+                  value={selectedMealType}
+                  onChange={setSelectedMealType}
+                />
+                <button
+                  onClick={addManualToDaily}
+                  style={{
+                    width: "100%",
+                    padding: "14px",
+                    borderRadius: "12px",
+                    border: "none",
+                    cursor: "pointer",
+                    background: "linear-gradient(135deg, #7BE0AD, #4CB97A)",
+                    color: "#0C0C0E",
+                    fontSize: "14px",
+                    fontWeight: 700,
+                    fontFamily: "'DM Sans',sans-serif",
+                    marginTop: "8px",
+                  }}
+                >
+                  Add to Log
+                </button>
               </>
             )}
 
             {error && (
-              <p style={{ color: "#E87272", fontSize: "13px", textAlign: "center", marginTop: "12px" }}>{error}</p>
+              <p
+                style={{
+                  color: "#E87272",
+                  fontSize: "13px",
+                  textAlign: "center",
+                  marginTop: "12px",
+                }}
+              >
+                {error}
+              </p>
             )}
           </div>
         </div>
@@ -1445,48 +2949,106 @@ export default function App() {
       {view === "weekly" && (
         <div style={{ animation: "fadeSlideIn 0.3s ease-out" }}>
           {/* Week Navigation */}
-          <div style={{
-            display: "flex", alignItems: "center", justifyContent: "center",
-            padding: "16px 20px 0", gap: "8px"
-          }}>
-            <button onClick={() => changeWeek(-1)} style={{
-              width: "32px", height: "32px", borderRadius: "50%", border: "none",
-              background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.5)",
-              cursor: "pointer", fontSize: "18px", display: "flex", alignItems: "center", justifyContent: "center",
-              fontFamily: "'DM Sans',sans-serif",
-            }}>‹</button>
-            <span style={{
-              fontSize: "15px", fontWeight: 600, minWidth: "180px", textAlign: "center",
-              color: isCurrentWeek ? "#E8C872" : "rgba(255,255,255,0.7)",
-            }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "16px 20px 0",
+              gap: "8px",
+            }}
+          >
+            <button
+              onClick={() => changeWeek(-1)}
+              style={{
+                width: "32px",
+                height: "32px",
+                borderRadius: "50%",
+                border: "none",
+                background: "rgba(255,255,255,0.04)",
+                color: "rgba(255,255,255,0.5)",
+                cursor: "pointer",
+                fontSize: "18px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontFamily: "'DM Sans',sans-serif",
+              }}
+            >
+              ‹
+            </button>
+            <span
+              style={{
+                fontSize: "15px",
+                fontWeight: 600,
+                minWidth: "180px",
+                textAlign: "center",
+                color: isCurrentWeek ? "#E8C872" : "rgba(255,255,255,0.7)",
+              }}
+            >
               {isCurrentWeek ? "This Week" : formatWeekRange(weekStart)}
             </span>
-            <button onClick={() => changeWeek(1)} disabled={isCurrentWeek} style={{
-              width: "32px", height: "32px", borderRadius: "50%", border: "none",
-              background: isCurrentWeek ? "transparent" : "rgba(255,255,255,0.04)",
-              color: isCurrentWeek ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.5)",
-              cursor: isCurrentWeek ? "default" : "pointer", fontSize: "18px",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontFamily: "'DM Sans',sans-serif",
-            }}>›</button>
-            {!isCurrentWeek && (
-              <button onClick={() => setWeekStart(getWeekStartMonday(todayStr))} style={{
-                padding: "4px 12px", borderRadius: "12px", border: "none",
-                background: "rgba(232,200,114,0.1)", color: "#E8C872",
-                cursor: "pointer", fontSize: "11px", fontWeight: 600,
+            <button
+              onClick={() => changeWeek(1)}
+              disabled={isCurrentWeek}
+              style={{
+                width: "32px",
+                height: "32px",
+                borderRadius: "50%",
+                border: "none",
+                background: isCurrentWeek
+                  ? "transparent"
+                  : "rgba(255,255,255,0.04)",
+                color: isCurrentWeek
+                  ? "rgba(255,255,255,0.1)"
+                  : "rgba(255,255,255,0.5)",
+                cursor: isCurrentWeek ? "default" : "pointer",
+                fontSize: "18px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
                 fontFamily: "'DM Sans',sans-serif",
-              }}>This Week</button>
+              }}
+            >
+              ›
+            </button>
+            {!isCurrentWeek && (
+              <button
+                onClick={() => setWeekStart(getWeekStartMonday(todayStr))}
+                style={{
+                  padding: "4px 12px",
+                  borderRadius: "12px",
+                  border: "none",
+                  background: "rgba(232,200,114,0.1)",
+                  color: "#E8C872",
+                  cursor: "pointer",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  fontFamily: "'DM Sans',sans-serif",
+                }}
+              >
+                This Week
+              </button>
             )}
           </div>
 
           {weeklyLoading ? (
             <div style={{ padding: "32px 20px", textAlign: "center" }}>
-              <div style={{
-                height: "3px", borderRadius: "2px", margin: "0 auto 16px", width: "200px",
-                background: "linear-gradient(90deg, transparent, #E8C872, transparent)",
-                backgroundSize: "200% 100%", animation: "shimmer 1.5s infinite"
-              }} />
-              <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "13px" }}>Loading stats...</p>
+              <div
+                style={{
+                  height: "3px",
+                  borderRadius: "2px",
+                  margin: "0 auto 16px",
+                  width: "200px",
+                  background:
+                    "linear-gradient(90deg, transparent, #E8C872, transparent)",
+                  backgroundSize: "200% 100%",
+                  animation: "shimmer 1.5s infinite",
+                }}
+              />
+              <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "13px" }}>
+                Loading stats...
+              </p>
             </div>
           ) : weeklyData.length > 0 ? (
             <>
@@ -1494,60 +3056,182 @@ export default function App() {
               <div style={{ padding: "16px 10px 0" }}>
                 <WeeklyBarChart
                   data={weeklyData}
-                  goal={weeklyMetric === "calories" ? goals.calories : weeklyMetric === "protein_g" ? goals.proteinG : weeklyMetric === "carbs_g" ? goals.carbsG : goals.fatG}
+                  goal={
+                    weeklyMetric === "calories"
+                      ? goals.calories
+                      : weeklyMetric === "protein_g"
+                        ? goals.proteinG
+                        : weeklyMetric === "carbs_g"
+                          ? goals.carbsG
+                          : goals.fatG
+                  }
                   todayStr={todayStr}
-                  onBarTap={(dateStr) => { setSelectedDate(dateStr); setView("daily"); }}
+                  onBarTap={(dateStr) => {
+                    setSelectedDate(dateStr);
+                    setView("daily");
+                  }}
                   metric={weeklyMetric}
                 />
               </div>
 
               {/* Summary Stats */}
               {(() => {
-                const daysLogged = weeklyData.filter(d => d.calories > 0);
+                const daysLogged = weeklyData.filter((d) => d.calories > 0);
                 const n = daysLogged.length || 1;
-                const totals = weeklyData.reduce((acc, d) => ({
-                  calories: acc.calories + d.calories,
-                  protein_g: acc.protein_g + d.protein_g,
-                  carbs_g: acc.carbs_g + d.carbs_g,
-                  fat_g: acc.fat_g + d.fat_g,
-                }), { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 });
-                const atGoal = daysLogged.filter(d => d.calories >= goals.calories * 0.9 && d.calories <= goals.calories * 1.1).length;
+                const totals = weeklyData.reduce(
+                  (acc, d) => ({
+                    calories: acc.calories + d.calories,
+                    protein_g: acc.protein_g + d.protein_g,
+                    carbs_g: acc.carbs_g + d.carbs_g,
+                    fat_g: acc.fat_g + d.fat_g,
+                  }),
+                  { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+                );
+                const atGoal = daysLogged.filter(
+                  (d) =>
+                    d.calories >= goals.calories * 0.9 &&
+                    d.calories <= goals.calories * 1.1,
+                ).length;
 
                 return (
-                  <div style={{
-                    margin: "0 20px 16px", padding: "16px", borderRadius: "12px",
-                    background: "rgba(255,255,255,0.015)", border: "1px solid rgba(255,255,255,0.04)",
-                  }}>
-                    <div style={{ fontSize: "10px", color: "rgba(255,255,255,0.25)", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "12px" }}>
-                      Daily Averages <span style={{ color: "rgba(255,255,255,0.15)" }}>({n} day{n > 1 ? "s" : ""})</span>
+                  <div
+                    style={{
+                      margin: "0 20px 16px",
+                      padding: "16px",
+                      borderRadius: "12px",
+                      background: "rgba(255,255,255,0.015)",
+                      border: "1px solid rgba(255,255,255,0.04)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "10px",
+                        color: "rgba(255,255,255,0.25)",
+                        textTransform: "uppercase",
+                        letterSpacing: "1px",
+                        marginBottom: "12px",
+                      }}
+                    >
+                      Daily Averages{" "}
+                      <span style={{ color: "rgba(255,255,255,0.15)" }}>
+                        ({n} day{n > 1 ? "s" : ""})
+                      </span>
                     </div>
-                    <div style={{ display: "flex", justifyContent: "space-around", marginBottom: "16px" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-around",
+                        marginBottom: "16px",
+                      }}
+                    >
                       {[
-                        { label: "Calories", value: Math.round(totals.calories / n), color: "#E8C872", metric: "calories" },
-                        { label: "Protein", value: `${Math.round(totals.protein_g / n)}g`, color: "#7BE0AD", metric: "protein_g" },
-                        { label: "Carbs", value: `${Math.round(totals.carbs_g / n)}g`, color: "#72B4E8", metric: "carbs_g" },
-                        { label: "Fat", value: `${Math.round(totals.fat_g / n)}g`, color: "#E87272", metric: "fat_g" },
+                        {
+                          label: "Calories",
+                          value: Math.round(totals.calories / n),
+                          color: "#E8C872",
+                          metric: "calories",
+                        },
+                        {
+                          label: "Protein",
+                          value: `${Math.round(totals.protein_g / n)}g`,
+                          color: "#7BE0AD",
+                          metric: "protein_g",
+                        },
+                        {
+                          label: "Carbs",
+                          value: `${Math.round(totals.carbs_g / n)}g`,
+                          color: "#72B4E8",
+                          metric: "carbs_g",
+                        },
+                        {
+                          label: "Fat",
+                          value: `${Math.round(totals.fat_g / n)}g`,
+                          color: "#E87272",
+                          metric: "fat_g",
+                        },
                       ].map(({ label, value, color, metric }) => (
-                        <div key={label} onClick={() => setWeeklyMetric(metric)} style={{
-                          textAlign: "center", cursor: "pointer", padding: "6px 8px", borderRadius: "8px",
-                          background: weeklyMetric === metric ? `${color}15` : "transparent",
-                          transition: "background 0.2s",
-                        }}>
-                          <div style={{ fontSize: "18px", fontWeight: 700, color }}>{value}</div>
-                          <div style={{ fontSize: "9px", color: weeklyMetric === metric ? color : "rgba(255,255,255,0.3)", textTransform: "uppercase", fontWeight: weeklyMetric === metric ? 600 : 400 }}>{label}</div>
+                        <div
+                          key={label}
+                          onClick={() => setWeeklyMetric(metric)}
+                          style={{
+                            textAlign: "center",
+                            cursor: "pointer",
+                            padding: "6px 8px",
+                            borderRadius: "8px",
+                            background:
+                              weeklyMetric === metric
+                                ? `${color}15`
+                                : "transparent",
+                            transition: "background 0.2s",
+                          }}
+                        >
+                          <div
+                            style={{ fontSize: "18px", fontWeight: 700, color }}
+                          >
+                            {value}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: "9px",
+                              color:
+                                weeklyMetric === metric
+                                  ? color
+                                  : "rgba(255,255,255,0.3)",
+                              textTransform: "uppercase",
+                              fontWeight: weeklyMetric === metric ? 600 : 400,
+                            }}
+                          >
+                            {label}
+                          </div>
                         </div>
                       ))}
                     </div>
-                    <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: "12px", display: "flex", justifyContent: "space-around" }}>
+                    <div
+                      style={{
+                        borderTop: "1px solid rgba(255,255,255,0.06)",
+                        paddingTop: "12px",
+                        display: "flex",
+                        justifyContent: "space-around",
+                      }}
+                    >
                       {[
-                        { label: "Total Cal", value: totals.calories.toLocaleString(), color: "#E8C872" },
-                        { label: "Total Protein", value: `${totals.protein_g}g`, color: "#7BE0AD" },
-                        { label: "Days Logged", value: daysLogged.length, color: "rgba(255,255,255,0.6)" },
-                        { label: "At Goal", value: atGoal, color: atGoal > 0 ? "#7BE0AD" : "rgba(255,255,255,0.3)" },
+                        {
+                          label: "Total Cal",
+                          value: totals.calories.toLocaleString(),
+                          color: "#E8C872",
+                        },
+                        {
+                          label: "Total Protein",
+                          value: `${totals.protein_g}g`,
+                          color: "#7BE0AD",
+                        },
+                        {
+                          label: "Days Logged",
+                          value: daysLogged.length,
+                          color: "rgba(255,255,255,0.6)",
+                        },
+                        {
+                          label: "At Goal",
+                          value: atGoal,
+                          color:
+                            atGoal > 0 ? "#7BE0AD" : "rgba(255,255,255,0.3)",
+                        },
                       ].map(({ label, value, color }) => (
                         <div key={label} style={{ textAlign: "center" }}>
-                          <div style={{ fontSize: "14px", fontWeight: 600, color }}>{value}</div>
-                          <div style={{ fontSize: "9px", color: "rgba(255,255,255,0.3)", textTransform: "uppercase" }}>{label}</div>
+                          <div
+                            style={{ fontSize: "14px", fontWeight: 600, color }}
+                          >
+                            {value}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: "9px",
+                              color: "rgba(255,255,255,0.3)",
+                              textTransform: "uppercase",
+                            }}
+                          >
+                            {label}
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1560,11 +3244,22 @@ export default function App() {
               <p style={{ color: "rgba(255,255,255,0.2)", fontSize: "14px" }}>
                 No meals logged this week
               </p>
-              <button onClick={() => setView("capture")} style={{
-                marginTop: "16px", padding: "10px 24px", borderRadius: "10px", border: "none", cursor: "pointer",
-                background: "rgba(232,200,114,0.1)", color: "#E8C872",
-                fontSize: "13px", fontFamily: "'DM Sans',sans-serif"
-              }}>Scan your first meal</button>
+              <button
+                onClick={() => setView("capture")}
+                style={{
+                  marginTop: "16px",
+                  padding: "10px 24px",
+                  borderRadius: "10px",
+                  border: "none",
+                  cursor: "pointer",
+                  background: "rgba(232,200,114,0.1)",
+                  color: "#E8C872",
+                  fontSize: "13px",
+                  fontFamily: "'DM Sans',sans-serif",
+                }}
+              >
+                Scan your first meal
+              </button>
             </div>
           )}
         </div>
@@ -1574,79 +3269,209 @@ export default function App() {
       {view === "daily" && (
         <div style={{ animation: "fadeSlideIn 0.3s ease-out" }}>
           {/* Date Navigation */}
-          <div style={{
-            display: "flex", alignItems: "center", justifyContent: "center",
-            padding: "16px 20px 0", gap: "8px"
-          }}>
-            <button onClick={() => changeDate(-1)} style={{
-              width: "32px", height: "32px", borderRadius: "50%", border: "none",
-              background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.5)",
-              cursor: "pointer", fontSize: "18px", display: "flex", alignItems: "center", justifyContent: "center",
-              fontFamily: "'DM Sans',sans-serif",
-            }}>‹</button>
-            <span style={{
-              fontSize: "15px", fontWeight: 600, minWidth: "150px", textAlign: "center",
-              color: isToday ? "#E8C872" : "rgba(255,255,255,0.7)",
-            }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "16px 20px 0",
+              gap: "8px",
+            }}
+          >
+            <button
+              onClick={() => changeDate(-1)}
+              style={{
+                width: "32px",
+                height: "32px",
+                borderRadius: "50%",
+                border: "none",
+                background: "rgba(255,255,255,0.04)",
+                color: "rgba(255,255,255,0.5)",
+                cursor: "pointer",
+                fontSize: "18px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontFamily: "'DM Sans',sans-serif",
+              }}
+            >
+              ‹
+            </button>
+            <span
+              style={{
+                fontSize: "15px",
+                fontWeight: 600,
+                minWidth: "150px",
+                textAlign: "center",
+                color: isToday ? "#E8C872" : "rgba(255,255,255,0.7)",
+              }}
+            >
               {isToday ? "Today" : formatDisplayDate(selectedDate)}
             </span>
-            <button onClick={() => changeDate(1)} disabled={isToday} style={{
-              width: "32px", height: "32px", borderRadius: "50%", border: "none",
-              background: isToday ? "transparent" : "rgba(255,255,255,0.04)",
-              color: isToday ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.5)",
-              cursor: isToday ? "default" : "pointer", fontSize: "18px",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontFamily: "'DM Sans',sans-serif",
-            }}>›</button>
-            {!isToday && (
-              <button onClick={() => setSelectedDate(todayStr)} style={{
-                padding: "4px 12px", borderRadius: "12px", border: "none",
-                background: "rgba(232,200,114,0.1)", color: "#E8C872",
-                cursor: "pointer", fontSize: "11px", fontWeight: 600,
+            <button
+              onClick={() => changeDate(1)}
+              disabled={isToday}
+              style={{
+                width: "32px",
+                height: "32px",
+                borderRadius: "50%",
+                border: "none",
+                background: isToday ? "transparent" : "rgba(255,255,255,0.04)",
+                color: isToday
+                  ? "rgba(255,255,255,0.1)"
+                  : "rgba(255,255,255,0.5)",
+                cursor: isToday ? "default" : "pointer",
+                fontSize: "18px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
                 fontFamily: "'DM Sans',sans-serif",
-              }}>Today</button>
+              }}
+            >
+              ›
+            </button>
+            {!isToday && (
+              <button
+                onClick={() => setSelectedDate(todayStr)}
+                style={{
+                  padding: "4px 12px",
+                  borderRadius: "12px",
+                  border: "none",
+                  background: "rgba(232,200,114,0.1)",
+                  color: "#E8C872",
+                  cursor: "pointer",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  fontFamily: "'DM Sans',sans-serif",
+                }}
+              >
+                Today
+              </button>
             )}
           </div>
 
-          <div style={{
-            padding: "16px 20px 24px", background: "rgba(255,255,255,0.015)",
-            borderBottom: "1px solid rgba(255,255,255,0.04)"
-          }}>
+          <div
+            style={{
+              padding: "16px 20px 24px",
+              background: "rgba(255,255,255,0.015)",
+              borderBottom: "1px solid rgba(255,255,255,0.04)",
+            }}
+          >
             <div style={{ display: "flex", justifyContent: "space-around" }}>
-              <MacroRing value={dailyTotals.calories} max={goals.calories} color="#E8C872" label="Calories" unit="kcal" />
-              <MacroRing value={dailyTotals.protein_g} max={goals.proteinG} color="#7BE0AD" label="Protein" unit="g" />
-              <MacroRing value={dailyTotals.carbs_g} max={goals.carbsG} color="#72B4E8" label="Carbs" unit="g" />
-              <MacroRing value={dailyTotals.fat_g} max={goals.fatG} color="#E87272" label="Fat" unit="g" />
+              <MacroRing
+                value={dailyTotals.calories}
+                max={goals.calories}
+                color="#E8C872"
+                label="Calories"
+                unit="kcal"
+              />
+              <MacroRing
+                value={dailyTotals.protein_g}
+                max={goals.proteinG}
+                color="#7BE0AD"
+                label="Protein"
+                unit="g"
+              />
+              <MacroRing
+                value={dailyTotals.carbs_g}
+                max={goals.carbsG}
+                color="#72B4E8"
+                label="Carbs"
+                unit="g"
+              />
+              <MacroRing
+                value={dailyTotals.fat_g}
+                max={goals.fatG}
+                color="#E87272"
+                label="Fat"
+                unit="g"
+              />
             </div>
           </div>
 
           {/* Remaining macros — only on today with meals logged */}
           {isToday && dailyLog.length > 0 && (
-            <div style={{
-              display: "flex", justifyContent: "space-around", padding: "12px 20px",
-              borderBottom: "1px solid rgba(255,255,255,0.04)",
-            }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-around",
+                padding: "12px 20px",
+                borderBottom: "1px solid rgba(255,255,255,0.04)",
+              }}
+            >
               {[
-                { label: "Calories", remaining: goals.calories - dailyTotals.calories, goal: goals.calories, color: "#E8C872", unit: "" },
-                { label: "Protein", remaining: Math.round(goals.proteinG - dailyTotals.protein_g), goal: goals.proteinG, color: "#7BE0AD", unit: "g" },
-                { label: "Carbs", remaining: Math.round(goals.carbsG - dailyTotals.carbs_g), goal: goals.carbsG, color: "#72B4E8", unit: "g" },
-                { label: "Fat", remaining: Math.round(goals.fatG - dailyTotals.fat_g), goal: goals.fatG, color: "#E87272", unit: "g" },
+                {
+                  label: "Calories",
+                  remaining: goals.calories - dailyTotals.calories,
+                  goal: goals.calories,
+                  color: "#E8C872",
+                  unit: "",
+                },
+                {
+                  label: "Protein",
+                  remaining: Math.round(goals.proteinG - dailyTotals.protein_g),
+                  goal: goals.proteinG,
+                  color: "#7BE0AD",
+                  unit: "g",
+                },
+                {
+                  label: "Carbs",
+                  remaining: Math.round(goals.carbsG - dailyTotals.carbs_g),
+                  goal: goals.carbsG,
+                  color: "#72B4E8",
+                  unit: "g",
+                },
+                {
+                  label: "Fat",
+                  remaining: Math.round(goals.fatG - dailyTotals.fat_g),
+                  goal: goals.fatG,
+                  color: "#E87272",
+                  unit: "g",
+                },
               ].map(({ label, remaining, goal, color, unit }) => {
                 const atGoal = goal > 0 && Math.abs(remaining) <= goal * 0.02;
                 const over = remaining < 0 && !atGoal;
                 return (
                   <div key={label} style={{ textAlign: "center" }}>
-                    <div style={{
-                      fontSize: "15px", fontWeight: 700,
-                      color: atGoal ? color : over ? "rgba(232,114,114,0.7)" : color,
-                    }}>
-                      {atGoal ? "On target" : `${Math.abs(Math.round(remaining))}${unit}`}
+                    <div
+                      style={{
+                        fontSize: "15px",
+                        fontWeight: 700,
+                        color: atGoal
+                          ? color
+                          : over
+                            ? "rgba(232,114,114,0.7)"
+                            : color,
+                      }}
+                    >
+                      {atGoal
+                        ? "On target"
+                        : `${Math.abs(Math.round(remaining))}${unit}`}
                     </div>
-                    <div style={{ fontSize: "9px", color: atGoal ? color : over ? "rgba(232,114,114,0.7)" : color, textTransform: "uppercase", fontWeight: 700, marginTop: "2px" }}>
+                    <div
+                      style={{
+                        fontSize: "9px",
+                        color: atGoal
+                          ? color
+                          : over
+                            ? "rgba(232,114,114,0.7)"
+                            : color,
+                        textTransform: "uppercase",
+                        fontWeight: 700,
+                        marginTop: "2px",
+                      }}
+                    >
                       {label}
                     </div>
                     {!atGoal && (
-                      <div style={{ fontSize: "10px", color: over ? "rgba(232,114,114,0.4)" : "rgba(255,255,255,0.3)" }}>
+                      <div
+                        style={{
+                          fontSize: "10px",
+                          color: over
+                            ? "rgba(232,114,114,0.4)"
+                            : "rgba(255,255,255,0.3)",
+                        }}
+                      >
                         {over ? "Over" : "Remaining"}
                       </div>
                     )}
@@ -1658,33 +3483,71 @@ export default function App() {
 
           {/* Guest sign-up prompt */}
           {isGuest && dailyLog.length > 0 && (
-            <div style={{
-              margin: "16px 20px", padding: "14px 16px", borderRadius: "10px",
-              background: "rgba(232,200,114,0.04)", border: "1px solid rgba(232,200,114,0.08)",
-              display: "flex", alignItems: "center", justifyContent: "space-between",
-            }}>
-              <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.5)", margin: 0 }}>
+            <div
+              style={{
+                margin: "16px 20px",
+                padding: "14px 16px",
+                borderRadius: "10px",
+                background: "rgba(232,200,114,0.04)",
+                border: "1px solid rgba(232,200,114,0.08)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <p
+                style={{
+                  fontSize: "12px",
+                  color: "rgba(255,255,255,0.5)",
+                  margin: 0,
+                }}
+              >
                 Create an account to save your data across devices
               </p>
-              <button onClick={() => setShowAuth(true)} style={{
-                padding: "6px 14px", borderRadius: "8px", border: "none", cursor: "pointer",
-                background: "rgba(232,200,114,0.15)", color: "#E8C872",
-                fontSize: "11px", fontWeight: 600, fontFamily: "'DM Sans',sans-serif",
-                whiteSpace: "nowrap", marginLeft: "12px",
-              }}>Sign up</button>
+              <button
+                onClick={() => setShowAuth(true)}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: "8px",
+                  border: "none",
+                  cursor: "pointer",
+                  background: "rgba(232,200,114,0.15)",
+                  color: "#E8C872",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  fontFamily: "'DM Sans',sans-serif",
+                  whiteSpace: "nowrap",
+                  marginLeft: "12px",
+                }}
+              >
+                Sign up
+              </button>
             </div>
           )}
 
           {dailyLog.length === 0 ? (
             <div style={{ padding: "60px 20px", textAlign: "center" }}>
               <p style={{ color: "rgba(255,255,255,0.2)", fontSize: "14px" }}>
-                {isToday ? "No meals logged yet today" : `No meals on ${formatDisplayDate(selectedDate)}`}
+                {isToday
+                  ? "No meals logged yet today"
+                  : `No meals on ${formatDisplayDate(selectedDate)}`}
               </p>
-              <button onClick={() => setView("capture")} style={{
-                marginTop: "16px", padding: "10px 24px", borderRadius: "10px", border: "none", cursor: "pointer",
-                background: "rgba(232,200,114,0.1)", color: "#E8C872",
-                fontSize: "13px", fontFamily: "'DM Sans',sans-serif"
-              }}>Scan your first meal</button>
+              <button
+                onClick={() => setView("capture")}
+                style={{
+                  marginTop: "16px",
+                  padding: "10px 24px",
+                  borderRadius: "10px",
+                  border: "none",
+                  cursor: "pointer",
+                  background: "rgba(232,200,114,0.1)",
+                  color: "#E8C872",
+                  fontSize: "13px",
+                  fontFamily: "'DM Sans',sans-serif",
+                }}
+              >
+                Scan your first meal
+              </button>
             </div>
           ) : (
             <div>
@@ -1692,65 +3555,158 @@ export default function App() {
                 const groupTotals = computeDailyTotals(groupMeals);
                 return (
                   <div key={type}>
-                    <div style={{
-                      padding: "16px 20px 8px", display: "flex", justifyContent: "space-between", alignItems: "baseline",
-                    }}>
-                      <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.25)", textTransform: "uppercase", letterSpacing: "1px", fontWeight: 500 }}>
+                    <div
+                      style={{
+                        padding: "16px 20px 8px",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "baseline",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          color: "rgba(255,255,255,0.25)",
+                          textTransform: "uppercase",
+                          letterSpacing: "1px",
+                          fontWeight: 500,
+                        }}
+                      >
                         {MEAL_TYPE_LABELS[type]}
                       </span>
-                      <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.2)", fontVariantNumeric: "tabular-nums" }}>
+                      <span
+                        style={{
+                          fontSize: "10px",
+                          color: "rgba(255,255,255,0.2)",
+                          fontVariantNumeric: "tabular-nums",
+                        }}
+                      >
                         {groupTotals.calories} cal
                       </span>
                     </div>
                     {groupMeals.map((entry, i) => {
                       const totals = mealTotals(entry.items);
-                      const time = new Date(entry.scannedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                      const time = new Date(entry.scannedAt).toLocaleTimeString(
+                        [],
+                        { hour: "2-digit", minute: "2-digit" },
+                      );
                       const mealKey = user ? entry.id : dailyLog.indexOf(entry);
-                      const isPendingDelete = deleteToast && deleteToast.mealIdOrIndex === mealKey;
+                      const isPendingDelete =
+                        deleteToast && deleteToast.mealIdOrIndex === mealKey;
                       if (isPendingDelete) return null;
                       return (
-                        <div key={entry.id || `${type}-${i}`} style={{
-                          display: "flex", gap: "14px", padding: "14px 20px", alignItems: "center",
-                          borderBottom: "1px solid rgba(255,255,255,0.04)",
-                          animation: `fadeSlideIn 0.3s ${i * 0.05}s both ease-out`, cursor: "pointer"
-                        }} onClick={() => {
-                          setAnalysis({
-                            items: entry.items.map(normalizeItem),
-                            totals,
-                            meal_notes: entry.mealNotes || entry.meal_notes,
-                          });
-                          setImage(entry.imageUrl || null);
-                          setMealDetailMode(true);
-                          setView("result");
-                        }}>
+                        <div
+                          key={entry.id || `${type}-${i}`}
+                          style={{
+                            display: "flex",
+                            gap: "14px",
+                            padding: "14px 20px",
+                            alignItems: "center",
+                            borderBottom: "1px solid rgba(255,255,255,0.04)",
+                            animation: `fadeSlideIn 0.3s ${i * 0.05}s both ease-out`,
+                            cursor: "pointer",
+                          }}
+                          onClick={() => {
+                            setAnalysis({
+                              items: entry.items.map(normalizeItem),
+                              totals,
+                              meal_notes: entry.mealNotes || entry.meal_notes,
+                            });
+                            setImage(entry.imageUrl || null);
+                            setMealDetailMode(true);
+                            setView("result");
+                          }}
+                        >
                           {entry.imageUrl ? (
-                            <img src={entry.imageUrl} alt="" style={{ width: "52px", height: "52px", borderRadius: "10px", objectFit: "cover" }} />
+                            <img
+                              src={entry.imageUrl}
+                              alt=""
+                              style={{
+                                width: "52px",
+                                height: "52px",
+                                borderRadius: "10px",
+                                objectFit: "cover",
+                              }}
+                            />
                           ) : (
-                            <div style={{
-                              width: "52px", height: "52px", borderRadius: "10px", display: "flex",
-                              alignItems: "center", justifyContent: "center", flexShrink: 0,
-                              background: "rgba(255,255,255,0.04)", fontSize: "18px", color: "rgba(255,255,255,0.2)",
-                            }}>
-                              {entry.items[0]?.name?.charAt(0)?.toUpperCase() || "?"}
+                            <div
+                              style={{
+                                width: "52px",
+                                height: "52px",
+                                borderRadius: "10px",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                flexShrink: 0,
+                                background: "rgba(255,255,255,0.04)",
+                                fontSize: "18px",
+                                color: "rgba(255,255,255,0.2)",
+                              }}
+                            >
+                              {entry.items[0]?.name?.charAt(0)?.toUpperCase() ||
+                                "?"}
                             </div>
                           )}
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: "14px", fontWeight: 500, marginBottom: "4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                              {entry.items.map(it => it.name).join(", ")}
+                            <div
+                              style={{
+                                fontSize: "14px",
+                                fontWeight: 500,
+                                marginBottom: "4px",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {entry.items.map((it) => it.name).join(", ")}
                             </div>
-                            <div style={{ display: "flex", gap: "10px", fontSize: "11px", color: "rgba(255,255,255,0.35)" }}>
-                              <span style={{ color: "#E8C872" }}>{totals.calories} cal</span>
+                            <div
+                              style={{
+                                display: "flex",
+                                gap: "10px",
+                                fontSize: "11px",
+                                color: "rgba(255,255,255,0.35)",
+                              }}
+                            >
+                              <span style={{ color: "#E8C872" }}>
+                                {totals.calories} cal
+                              </span>
                               <span>P {Math.round(totals.protein_g)}g</span>
                               <span>C {Math.round(totals.carbs_g)}g</span>
                               <span>F {Math.round(totals.fat_g)}g</span>
                             </div>
                           </div>
-                          <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.2)", flexShrink: 0, marginRight: "8px" }}>{time}</span>
-                          <button onClick={(e) => handleDeleteMeal(e, user ? entry.id : i)} style={{
-                            width: "24px", height: "24px", borderRadius: "50%", border: "none", cursor: "pointer",
-                            background: "rgba(232,114,114,0.1)", color: "#E87272", fontSize: "12px",
-                            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-                          }}>✕</button>
+                          <span
+                            style={{
+                              fontSize: "12px",
+                              color: "rgba(255,255,255,0.2)",
+                              flexShrink: 0,
+                              marginRight: "8px",
+                            }}
+                          >
+                            {time}
+                          </span>
+                          <button
+                            onClick={(e) =>
+                              handleDeleteMeal(e, user ? entry.id : i)
+                            }
+                            style={{
+                              width: "24px",
+                              height: "24px",
+                              borderRadius: "50%",
+                              border: "none",
+                              cursor: "pointer",
+                              background: "rgba(232,114,114,0.1)",
+                              color: "#E87272",
+                              fontSize: "12px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              flexShrink: 0,
+                            }}
+                          >
+                            ✕
+                          </button>
                         </div>
                       );
                     })}
@@ -1760,33 +3716,161 @@ export default function App() {
             </div>
           )}
 
-          <div style={{ padding: "20px", display: "flex", justifyContent: "center" }}>
-            <button onClick={resetCapture} style={{
-              padding: "14px 32px", borderRadius: "50px", border: "none", cursor: "pointer",
-              background: "linear-gradient(135deg, #E8C872, #D4A843)", color: "#0C0C0E",
-              fontSize: "14px", fontWeight: 700, fontFamily: "'DM Sans',sans-serif",
-              boxShadow: "0 4px 24px rgba(232,200,114,0.2)"
-            }}>+ Scan Meal</button>
+          <div
+            style={{
+              padding: "20px",
+              display: "flex",
+              justifyContent: "center",
+            }}
+          >
+            <button
+              onClick={resetCapture}
+              style={{
+                padding: "14px 32px",
+                borderRadius: "50px",
+                border: "none",
+                cursor: "pointer",
+                background: "linear-gradient(135deg, #E8C872, #D4A843)",
+                color: "#0C0C0E",
+                fontSize: "14px",
+                fontWeight: 700,
+                fontFamily: "'DM Sans',sans-serif",
+                boxShadow: "0 4px 24px rgba(232,200,114,0.2)",
+              }}
+            >
+              + Scan Meal
+            </button>
           </div>
         </div>
       )}
 
+      {/* Goals/Settings View */}
+      {view === "settings" &&
+        (user ? (
+          <GoalsScreen
+            goals={goals}
+            onSave={(newGoals) => setGoals(newGoals)}
+          />
+        ) : (
+          <div style={{ position: "relative" }}>
+            <div
+              style={{
+                opacity: 0.3,
+                pointerEvents: "none",
+                filter: "blur(1px)",
+              }}
+            >
+              <GoalsScreen goals={goals} onSave={() => {}} />
+            </div>
+            <div
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "center",
+                paddingTop: "120px",
+              }}
+            >
+              <div
+                style={{
+                  background: "#1a1a1e",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  borderRadius: "16px",
+                  padding: "24px 28px",
+                  textAlign: "center",
+                  maxWidth: "320px",
+                  boxShadow: "0 12px 40px rgba(0,0,0,0.6)",
+                }}
+              >
+                <div style={{ fontSize: "32px", marginBottom: "12px" }}>🎯</div>
+                <p
+                  style={{
+                    fontSize: "14px",
+                    color: "rgba(255,255,255,0.7)",
+                    lineHeight: 1.5,
+                    marginBottom: "16px",
+                  }}
+                >
+                  Please create an account or login to use the Goals feature
+                </p>
+                <button
+                  onClick={() => setShowAuth(true)}
+                  style={{
+                    padding: "12px 24px",
+                    borderRadius: "12px",
+                    border: "none",
+                    cursor: "pointer",
+                    background: "rgba(232,200,114,0.15)",
+                    color: "#E8C872",
+                    fontSize: "14px",
+                    fontWeight: 700,
+                    fontFamily: "'DM Sans',sans-serif",
+                  }}
+                >
+                  Login / Sign Up
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+
       {/* Delete undo toast */}
       {deleteToast && (
-        <div style={{
-          position: "fixed", bottom: "32px", left: "50%", transform: "translateX(-50%)",
-          background: "#1a1a1e", border: "1px solid rgba(255,255,255,0.1)",
-          borderRadius: "12px", padding: "12px 20px", display: "flex", alignItems: "center",
-          gap: "16px", zIndex: 200, boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
-          animation: "fadeSlideIn 0.2s ease-out",
-        }}>
-          <span style={{ fontSize: "14px", color: "rgba(255,255,255,0.7)" }}>Meal deleted</span>
-          <button onClick={undoDelete} style={{
-            background: "none", border: "none", cursor: "pointer",
-            color: "#E8C872", fontSize: "14px", fontWeight: 700,
-            fontFamily: "'DM Sans',sans-serif", padding: "4px 8px",
-          }}>Undo</button>
+        <div
+          style={{
+            position: "fixed",
+            bottom: "calc(80px + env(safe-area-inset-bottom, 0px))",
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "#1a1a1e",
+            border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: "12px",
+            padding: "12px 20px",
+            display: "flex",
+            alignItems: "center",
+            gap: "16px",
+            zIndex: 200,
+            boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+            animation: "fadeSlideIn 0.2s ease-out",
+          }}
+        >
+          <span style={{ fontSize: "14px", color: "rgba(255,255,255,0.7)" }}>
+            Meal deleted
+          </span>
+          <button
+            onClick={undoDelete}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              color: "#E8C872",
+              fontSize: "14px",
+              fontWeight: 700,
+              fontFamily: "'DM Sans',sans-serif",
+              padding: "4px 8px",
+            }}
+          >
+            Undo
+          </button>
         </div>
+      )}
+
+      {/* Bottom Tab Bar */}
+      {["capture", "daily", "weekly", "settings"].includes(view) && (
+        <BottomTabBar
+          view={view}
+          dailyLogCount={dailyLog.length}
+          onTabChange={(tabId) => {
+            if (tabId === "settings" && !user && view === "settings") return;
+            setView(tabId);
+            if (tabId === "daily") refreshData();
+            if (tabId === "weekly") loadWeeklyData();
+          }}
+        />
       )}
     </div>
   );
