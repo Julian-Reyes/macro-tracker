@@ -156,8 +156,8 @@ export default function BarcodeScannerView({ onBarcodeDetected, onClose }) {
         {mode === "live" && (
           <svg
             viewBox="0 0 120 60"
-            width="200"
-            height="100"
+            width="280"
+            height="140"
             style={{
               position: "absolute",
               top: "50%",
