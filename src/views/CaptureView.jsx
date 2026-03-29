@@ -98,6 +98,23 @@ export default function CaptureView({
 
           <div style={{ display: "flex", gap: "12px", width: "100%" }}>
             <button
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                flex: 1,
+                padding: "14px",
+                borderRadius: "12px",
+                cursor: "pointer",
+                border: "1px solid rgba(255,255,255,0.1)",
+                background: "rgba(255,255,255,0.03)",
+                color: "#fff",
+                fontSize: "14px",
+                fontWeight: 500,
+                fontFamily: "'DM Sans',sans-serif",
+              }}
+            >
+              🖼️ Gallery
+            </button>
+            <button
               onClick={() => cameraInputRef.current?.click()}
               style={{
                 flex: 1,
@@ -114,23 +131,6 @@ export default function CaptureView({
               }}
             >
               📷 Camera
-            </button>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              style={{
-                flex: 1,
-                padding: "14px",
-                borderRadius: "12px",
-                cursor: "pointer",
-                border: "1px solid rgba(255,255,255,0.1)",
-                background: "rgba(255,255,255,0.03)",
-                color: "#fff",
-                fontSize: "14px",
-                fontWeight: 500,
-                fontFamily: "'DM Sans',sans-serif",
-              }}
-            >
-              🖼️ Gallery
             </button>
             <button
               onClick={onBarcodeScan}
