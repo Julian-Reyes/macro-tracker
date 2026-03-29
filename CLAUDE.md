@@ -8,11 +8,21 @@ AI-powered food macro tracker. User takes a photo of food/drink → AI analyzes 
 ```
 macro-tracker/
 ├── src/                  # React frontend (Vite)
-│   ├── App.jsx           # Main app (auth flow, scan, daily log, bottom tab bar)
+│   ├── App.jsx           # State management, handlers, view routing (~1,050 lines)
 │   ├── AuthScreen.jsx    # Login/register UI
 │   ├── GoalsScreen.jsx   # Profile form + auto-calculated macro goals
-│   ├── api.js            # API client, token mgmt, image downscaling
-│   └── main.jsx          # React entry
+│   ├── api.js            # API client, token mgmt, image downscaling, barcode lookup
+│   ├── main.jsx          # React entry
+│   ├── views/            # Extracted view components (presentation layer)
+│   │   ├── BarcodeScannerView.jsx  # Live camera + photo fallback barcode scanner
+│   │   ├── CaptureView.jsx         # Camera/gallery/barcode capture + AI results
+│   │   └── ManualEntryView.jsx     # Text search food entry + portion scaling
+│   └── components/       # Reusable UI components
+│       ├── BottomTabBar.jsx  # Navigation tabs (Scan/Log/Stats/Goals)
+│       ├── ItemRow.jsx       # Unified food item display with macro bars
+│       ├── MacroRing.jsx     # Circular progress ring for macro values
+│       ├── MealTypePicker.jsx # Breakfast/Lunch/Dinner/Snack selector
+│       └── WeeklyBarChart.jsx # SVG bar chart for weekly stats
 ├── server/               # Express backend
 │   ├── prisma/
 │   │   └── schema.prisma # DB schema (SQLite via Prisma)
@@ -23,19 +33,19 @@ macro-tracker/
 │       ├── routes/
 │       │   ├── auth.js   # POST /register, /login, GET /me
 │       │   ├── meals.js  # POST /, POST /scan, POST /import, GET /, GET /history/range, GET /:id, DELETE /:id
-│       │   ├── nutrition.js  # GET /search (no auth), GET /lookup (auth)
+│       │   ├── nutrition.js  # GET /search, GET /barcode (no auth), GET /lookup (auth)
 │       │   └── goals.js  # GET /, PUT /, GET /profile, PUT /profile
 │       └── services/
 │           ├── ai.js     # Multi-provider AI dispatcher (Anthropic, Gemini, OpenAI, Ollama)
 │           ├── goals.js  # Mifflin-St Jeor BMR/TDEE calculator + macro splits
-│           └── nutrition.js  # USDA + Open Food Facts lookup with DB cache
+│           └── nutrition.js  # USDA + Open Food Facts + barcode lookup with DB cache
 ├── public/
 │   ├── manifest.json     # PWA manifest (app name, icons, theme)
 │   ├── icon.svg          # App icon (gold "M" on dark bg)
 │   ├── icon-maskable.svg # Maskable icon variant for adaptive icons
 │   └── sw.js             # Service worker (cache-first static, network-first nav)
 ├── index.html
-├── vite.config.js        # Dev proxy: /api + /uploads → localhost:3001
+├── vite.config.js        # Dev proxy + HTTPS (basic-ssl plugin for LAN testing)
 ├── Dockerfile            # Production build for Fly.io
 ├── fly.toml              # Fly.io deployment config
 ├── .github/
@@ -50,7 +60,8 @@ macro-tracker/
 - **Database**: SQLite via Prisma ORM (upgrade path: Neon Postgres when scaling)
 - **Auth**: JWT (bcryptjs for passwords), username-based login, token stored in localStorage. Server requires `JWT_SECRET` env var (crashes if missing)
 - **AI**: Multi-provider — Anthropic Claude, Google Gemini, OpenAI GPT-4o, Ollama local
-- **Nutrition data**: USDA FoodData Central API + Open Food Facts (cached in DB)
+- **Nutrition data**: USDA FoodData Central API + Open Food Facts text search + OFF barcode API (all cached in DB)
+- **Barcode scanning**: html5-qrcode (live camera stream) + native BarcodeDetector API (photo fallback), lazy-loaded via dynamic `import()`
 - **Image storage**: Local disk (swap for Cloudflare R2 when scaling)
 - **Image optimization**: Client-side canvas downscaling to max 1024px before upload
 - **PWA**: Installable via manifest.json + service worker, standalone display, portrait orientation
@@ -61,7 +72,7 @@ macro-tracker/
 ### Frontend
 ```bash
 npm install
-npm run dev          # localhost:3000 (proxies /api → :3001)
+npm run dev          # https://localhost:3000 (HTTPS, proxies /api → :3001)
 ```
 
 ### Backend
@@ -85,6 +96,8 @@ node server/src/index.js         # serves both API + static build
 - GitHub Actions workflow builds Vite app and deploys to GitHub Pages
 - `VITE_API_URL` GitHub repo secret gets baked into the build
 - Live at: https://julianreyes.dev/macro-tracker/
+- **Pre-deploy checklist:**
+  - [ ] Bump `CACHE_NAME` in `public/sw.js` if static assets or index.html changed (forces SW cache purge)
 
 **Backend** (manual):
 - `fly deploy -a macro-tracker` from project root
@@ -120,6 +133,7 @@ All authenticated routes require `Authorization: Bearer <token>` header. Guest e
 
 ### Nutrition
 - `GET /api/nutrition/search?q=chicken+breast&limit=5` — **no auth** — multi-result search (USDA with OFF fallback), returns per-serving + per-100g macros for portion scaling. Rate limited: 30 req / 15 min
+- `GET /api/nutrition/barcode?code=0123456789012` — **no auth** — barcode lookup via Open Food Facts API, cached in NutritionCache with `source="barcode_off"`. Validates 8-14 digit codes. Rate limited: same as search
 - `GET /api/nutrition/lookup?food=chicken+breast` — **auth required** — single-best USDA/OFF lookup with DB cache
 
 ### Goals
@@ -148,10 +162,10 @@ Gemini is the default (free tier, no billing needed). Ollama requires a local in
 ## Current State
 
 ### What works
-- Frontend: guest mode (try before sign up), login/register screens (shown as overlay), camera/gallery capture, base64 encoding + client-side downscaling, AI analysis via backend API, results display with macro rings and item breakdown, persistent daily log (localStorage for guests, DB for authenticated), delete meals with undo toast (4-second window to undo before actual deletion), goals-based MacroRing max values, guest data migration to DB on registration, logo click navigates to fresh scan, scan state resets after adding meal to log, date-based daily view with prev/next navigation (meals and totals filtered per day for both guest and authenticated modes), meal detail view (click any logged meal to see full macro breakdown, image, item list, and notes), guest meal images persisted as downscaled data URLs in localStorage, portion editing via per-item multiplier (tap item → ×0.25 step stepper, macro rings and totals update in real-time, adjusted values saved to log), manual food entry via text search (USDA/OFF lookup with per-100g scaling, debounced search, gram-based portion input), meal type labels (Breakfast/Lunch/Dinner/Snack) with time-based auto-selection and grouped daily log, weekly summary view with interactive SVG bar chart (metric switching between calories/protein/carbs/fat, week navigation, tap bar to jump to daily view), add extra items to scanned meals (inline USDA/OFF search in result view, combined with AI-analyzed items before saving), remaining macros display on daily view ("# MACRO Remaining" format, shown only on today when meals are logged), unified ItemRow component for all food items (AI-analyzed, search-added extras, manual entries) with consistent macro bars and removable via ✕ on expand, PWA installable (manifest + service worker + Apple meta tags), goals editing UI (profile-based auto-calculation: height/weight/age/sex/activity/goal → Mifflin-St Jeor BMR → TDEE → macro split, with imperial/metric toggle and live preview), bottom tab bar navigation (Scan/Log/Stats/Goals with SVG icons, iOS safe area support, hidden during sub-views)
-- Backend: all routes working, SQLite via Prisma, AI multi-provider dispatcher, USDA + Open Food Facts lookup with DB caching (USDA searches Foundation + SR Legacy + FNDDS data types for broad coverage; OFF results filtered for English language, valid nutrition data, and rounded values), JWT auth (crashes if JWT_SECRET missing), rate limiting on analyze + scan + search endpoints, serves static React build in production, guest analyze endpoint (no auth), bulk import endpoint for guest data migration, sanitized error messages (generic errors to client, full details server-side only)
+- Frontend: guest mode (try before sign up), login/register screens (shown as overlay), camera/gallery capture, base64 encoding + client-side downscaling, AI analysis via backend API, results display with macro rings and item breakdown, persistent daily log (localStorage for guests, DB for authenticated), delete meals with undo toast (4-second window to undo before actual deletion), goals-based MacroRing max values, guest data migration to DB on registration, logo click navigates to fresh scan, scan state resets after adding meal to log, date-based daily view with prev/next navigation (meals and totals filtered per day for both guest and authenticated modes), meal detail view (click any logged meal to see full macro breakdown, image, item list, and notes), guest meal images persisted as downscaled data URLs in localStorage, portion editing via per-item multiplier (tap item → ×0.25 step stepper, macro rings and totals update in real-time, adjusted values saved to log), manual food entry via text search (USDA/OFF lookup with per-100g scaling, debounced search, gram-based portion input), meal type labels (Breakfast/Lunch/Dinner/Snack) with time-based auto-selection and grouped daily log, weekly summary view with interactive SVG bar chart (metric switching between calories/protein/carbs/fat, week navigation, tap bar to jump to daily view), add extra items to scanned meals (inline USDA/OFF search in result view, combined with AI-analyzed items before saving), remaining macros display on daily view ("# MACRO Remaining" format, shown only on today when meals are logged), unified ItemRow component for all food items (AI-analyzed, search-added extras, manual entries) with consistent macro bars and removable via ✕ on expand, PWA installable (manifest + service worker + Apple meta tags), goals editing UI (profile-based auto-calculation: height/weight/age/sex/activity/goal → Mifflin-St Jeor BMR → TDEE → macro split, with imperial/metric toggle and live preview), bottom tab bar navigation (Scan/Log/Stats/Goals with SVG icons, iOS safe area support, hidden during sub-views), barcode scanner for packaged foods (live camera via html5-qrcode, photo fallback via BarcodeDetector API + html5-qrcode scanFile, manual code entry — results feed into manual entry flow for portion adjustment), refactored view layer (CaptureView, ManualEntryView, BarcodeScannerView extracted from App.jsx)
+- Backend: all routes working, SQLite via Prisma, AI multi-provider dispatcher, USDA + Open Food Facts lookup with DB caching (USDA searches Foundation + SR Legacy + FNDDS data types for broad coverage; OFF results filtered for English language, valid nutrition data, and rounded values), barcode lookup via OFF barcode API (cached in NutritionCache), JWT auth (crashes if JWT_SECRET missing), rate limiting on analyze + scan + search + barcode endpoints, serves static React build in production, guest analyze endpoint (no auth), bulk import endpoint for guest data migration, sanitized error messages (generic errors to client, full details server-side only)
 - Deployment: Live — frontend auto-deploys to GitHub Pages on push, backend on Fly.io (manual `fly deploy`). Fly.io volume mounts /data for SQLite + uploads
-- Dev access: Vite configured with `host: true` for LAN access (phone testing via local IP)
+- Dev access: Vite configured with `host: true` + `@vitejs/plugin-basic-ssl` for HTTPS LAN access (phone testing via `https://192.168.x.x:3000` — accept self-signed cert once). HTTPS required for getUserMedia, BarcodeDetector, and createImageBitmap APIs
 
 ### What could be improved
 - The nutrition lookup service could be used to cross-reference AI estimates against USDA data for improved accuracy
@@ -215,7 +229,7 @@ When ready for more users:
 ## Security
 - **JWT_SECRET**: Required env var — server crashes on startup if not set. Use a random 32-byte hex string in production (`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`)
 - **Helmet**: Security headers (X-Content-Type-Options, X-Frame-Options, HSTS, CSP, etc.) via `helmet` middleware
-- **Rate limiting**: `/api/meals/analyze` and `/api/meals/scan` are rate-limited to 10 requests per 15 minutes per IP. `/api/meals/import` is rate-limited to 5 requests per hour per IP. `/api/nutrition/search` is rate-limited to 100 requests per 15 minutes (higher to support search-as-you-type with 500ms debounce). `/api/auth/login` and `/api/auth/register` are rate-limited to 10 attempts per 15 minutes per IP. All via `express-rate-limit`
+- **Rate limiting**: `/api/meals/analyze` and `/api/meals/scan` are rate-limited to 10 requests per 15 minutes per IP. `/api/meals/import` is rate-limited to 5 requests per hour per IP. `/api/nutrition/search` and `/api/nutrition/barcode` are rate-limited to 100 requests per 15 minutes (higher to support search-as-you-type with 500ms debounce). `/api/auth/login` and `/api/auth/register` are rate-limited to 10 attempts per 15 minutes per IP. All via `express-rate-limit`
 - **Gemini API key restrictions**: Key restricted to Generative Language API only in Google Cloud Console. Free tier quotas enforce 5 RPM and 20 requests/day for gemini-2.5-flash
 - **CORS**: Restricted via `CORS_ORIGIN` env var on Fly.io (set to `https://julianreyes.dev`). Defaults to `http://localhost:3000` in dev
 - **API key in .env**: Gemini key is server-side only, never sent to the browser. Gemini's API passes the key as a URL query param — be aware this can appear in server/proxy logs
@@ -239,6 +253,8 @@ When ready for more users:
 - Guest meal images are stored as data URLs in localStorage (~50-200KB each). localStorage has a ~5MB limit, so this works for ~25-100 guest meals before hitting the cap — fine for "try before sign up" usage
 - Frontend deploys automatically on push to main (GitHub Actions). Backend does NOT auto-deploy — run `fly deploy -a macro-tracker` manually for server changes
 - `VITE_API_URL` is baked into the frontend build at deploy time. Changing the backend URL requires re-running the GitHub Actions workflow
+- Barcode scanner APIs (`getUserMedia`, `BarcodeDetector`, `createImageBitmap`) all require secure context (HTTPS). On HTTP LAN, only `<input type="file" capture>` works (native OS camera picker). The `@vitejs/plugin-basic-ssl` plugin provides HTTPS in dev. Vite 6's `server.https: true` alone does NOT work — the plugin is required
+- `html5-qrcode` is lazy-loaded via dynamic `import()` (~335KB). The main bundle stays ~226KB. The library's `scanFile` is unreliable for 1D barcodes from phone photos — prefer native `BarcodeDetector` API when available. The `#barcode-reader` div must always be in the DOM when the component mounts (not inside conditional render blocks) — otherwise `Html5Qrcode` can't attach and silently falls to photo mode. The library's internal video element needs CSS `!important` overrides (`max-height`, `object-fit: cover`) to prevent layout overflow on mobile
 - Service worker caches aggressively — when deploying breaking frontend changes, bump `CACHE_NAME` in `public/sw.js` (e.g., `macro-v1` → `macro-v2`) so old caches are purged on activate. Vite's hashed filenames help (new JS bundles get new URLs), but the SW itself and index.html are not hashed
 
 ## Planned Improvements
@@ -257,6 +273,7 @@ When ready for more users:
 - [x] Weekly summary view with interactive SVG bar chart and metric switching
 - [x] Add extra items to scanned meals via inline search
 - [x] Remaining macros display on daily view
+- [x] Barcode scanner — scan UPC/EAN via camera or photo, lookup via Open Food Facts barcode API
 - [ ] Portuguese language support
 - [ ] Model switcher UI (dropdown in settings to pick AI provider)
 - [x] Goals editing UI — profile-based auto-calculation with Mifflin-St Jeor formula
@@ -280,7 +297,7 @@ When ready for more users:
 10. ~~**Remaining macros**~~ ✅ Daily view shows "X left" / "X over" / "On target" for each macro below the MacroRings. Only displayed on today when meals are logged. Color-coded: macro color for under goal, dimmed red for over goal
 
 ### Tier 3 — Pro / monetization tier
-11. **Barcode scanner** — Scan packaged food UPC, query Open Food Facts API for exact nutrition
+11. ~~**Barcode scanner**~~ ✅ Scan UPC/EAN barcodes via live camera (html5-qrcode) or photo (BarcodeDetector API + html5-qrcode fallback) + manual code entry. Queries Open Food Facts barcode API (`/api/v0/product/{code}.json`), results cached in NutritionCache. Feeds into manual entry flow for portion adjustment. `BarcodeScannerView.jsx` handles three modes: loading → live → photo fallback. `searchByBarcode()` in `services/nutrition.js` handles API + caching
 12. **Progress photos** — Monthly body photos stored alongside weight data
 13. **Macro distribution settings** — Different goals for training vs. rest days
 14. **Export / share** — CSV export, share daily summary as image (Instagram-ready)
@@ -294,7 +311,7 @@ When ready for more users:
 20. **Multi-language AI prompts** — AI recognizes Brazilian dishes natively
 
 ## Conventions
-- Frontend: inline React styles, split into components when complexity demands it (App.jsx, AuthScreen.jsx, GoalsScreen.jsx, api.js)
+- Frontend: inline React styles, container/presentation split — App.jsx holds state + handlers, `src/views/` holds presentation JSX. Components extracted when complexity demands it. Pass-through prop naming: view components accept props with the same names as App.jsx state variables to minimize JSX changes during extraction
 - Backend: ES modules, flat service layer, Prisma for all DB access
 - Animations: CSS @keyframes in a <style> tag inside root component
 - New backend routes go in server/src/routes/ with their own Router
@@ -315,3 +332,6 @@ When ready for more users:
 - PWA: manifest.json + sw.js live in `public/` (copied to dist root by Vite). Service worker registered in main.jsx using `import.meta.env.BASE_URL + 'sw.js'`. Cache version bumped via `CACHE_NAME` in sw.js. Apple PWA meta tags in index.html for iOS standalone mode. `viewport-fit=cover` enables `env(safe-area-inset-bottom)` for home indicator padding
 - Navigation: `BottomTabBar` component with 4 tabs (Scan/Log/Stats/Goals) using inline SVG icons. Fixed to bottom with `env(safe-area-inset-bottom)` padding. Active tab: gold `#E8C872`, inactive: `rgba(255,255,255,0.45)`. Hidden during `result` and `manual` sub-views. Tab bar renders conditionally in App.jsx based on `view` state. Guest tapping Goals shows greyed-out preview with login prompt overlay. Header simplified to logo + "Login" button (guests) / "Log out" button (authenticated)
 - Goals: `GoalsScreen.jsx` with profile form (sex, age, height, weight, activity level, goal type). Client-side `calcMacros()` mirrors `services/goals.js` for live preview. Imperial/metric toggle with bidirectional conversion. `saveProfile()` → `PUT /api/goals/profile` persists profile + auto-calculates goals server-side. `UserProfile` Prisma model stores body data separately from `DailyGoals`
+- Barcode scanner flow: user taps "Barcode" on CaptureView → `barcodeScanning=true` → `BarcodeScannerView` renders with three modes (loading → live camera → photo fallback). On barcode detected → `handleBarcodeDetected(code)` → `lookupBarcode(code)` calls `GET /api/nutrition/barcode` → result set as `selectedFood` → view switches to ManualEntryView for portion adjustment. Reuses existing manual entry flow — no duplicate UI. `barcodeLoading` state shows shimmer during API lookup. Barcode resets in `resetCapture()`. Bottom tab bar hidden during scanning
+- Barcode source badge: items from barcode lookup display "BARCODE" badge (gold/blue styling) in search results, distinguished from "USDA" and "OFF" sources via `food.source === "barcode_off"`
+- Barcode caching: `searchByBarcode()` in `services/nutrition.js` caches results in existing `NutritionCache` table with `foodName=barcode, source="barcode_off"` — no schema migration needed

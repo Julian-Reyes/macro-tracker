@@ -95,6 +95,14 @@ export async function searchNutrition(query, limit = 5) {
   return data.results;
 }
 
+// --- Barcode lookup (no auth, guest-accessible) ---
+export async function lookupBarcode(code) {
+  const res = await fetch(`${API_BASE}/nutrition/barcode?code=${encodeURIComponent(code)}`);
+  const data = await res.json();
+  if (!res.ok) throw { status: res.status, message: data.error || 'Barcode lookup failed' };
+  return data.result;
+}
+
 export async function deleteMeal(id) {
   return apiFetch(`/meals/${id}`, { method: 'DELETE' });
 }

@@ -152,6 +152,62 @@ export async function searchNutritionMultiple(query, limit = 5) {
     });
 }
 
+// --- Barcode lookup via Open Food Facts ---
+export async function searchByBarcode(barcode) {
+  // Check cache first
+  const cached = await prisma.nutritionCache.findFirst({
+    where: { foodName: barcode, source: "barcode_off" },
+  });
+  if (cached) return cached.data;
+
+  const url = `https://world.openfoodfacts.org/api/v0/product/${barcode}.json`;
+  const res = await fetch(url);
+  if (!res.ok) return null;
+
+  const data = await res.json();
+  if (data.status !== 1 || !data.product?.nutriments) return null;
+
+  const product = data.product;
+  const n = product.nutriments;
+
+  const name = product.product_name?.trim();
+  if (!name) return null;
+
+  const hasData =
+    (n["energy-kcal_100g"] || 0) + (n.proteins_100g || 0) +
+    (n.carbohydrates_100g || 0) + (n.fat_100g || 0) > 0;
+  if (!hasData) return null;
+
+  const per100g = {
+    calories: Math.round(n["energy-kcal_100g"] || 0),
+    protein_g: +(n.proteins_100g || 0).toFixed(1),
+    carbs_g: +(n.carbohydrates_100g || 0).toFixed(1),
+    fat_g: +(n.fat_100g || 0).toFixed(1),
+    fiber_g: +(n.fiber_100g || 0).toFixed(1),
+    sugar_g: +(n.sugars_100g || 0).toFixed(1),
+  };
+
+  const result = {
+    source: "barcode_off",
+    barcode,
+    name,
+    brand: product.brands || null,
+    imageUrl: product.image_front_small_url || null,
+    servingSize: Math.round(product.serving_quantity || 100),
+    servingUnit: "g",
+    ...per100g,
+    per100g,
+  };
+
+  await prisma.nutritionCache.upsert({
+    where: { foodName_source: { foodName: barcode, source: "barcode_off" } },
+    update: { data: result },
+    create: { foodName: barcode, source: "barcode_off", data: result },
+  });
+
+  return result;
+}
+
 // --- Combined lookup with cache ---
 export async function lookupNutrition(foodName) {
   const normalized = foodName.toLowerCase().trim();
