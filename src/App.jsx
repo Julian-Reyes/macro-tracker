@@ -270,28 +270,32 @@ export default function App() {
     }
     const items = analysis.items.map((item, i) => {
       const mult = itemAdjustments[i].multiplier;
-      if (mult === 1.0) return item;
       return {
         ...item,
-        calories: Math.round(item.calories * mult),
-        protein_g: +((item.protein_g ?? 0) * mult).toFixed(1),
-        carbs_g: +((item.carbs_g ?? 0) * mult).toFixed(1),
-        fat_g: +((item.fat_g ?? 0) * mult).toFixed(1),
-        fiber_g: +((item.fiber_g ?? 0) * mult).toFixed(1),
-        sugar_g: +((item.sugar_g ?? 0) * mult).toFixed(1),
+        multiplier: mult,
+        ...(mult !== 1.0 ? {
+          calories: Math.round(item.calories * mult),
+          protein_g: +((item.protein_g ?? 0) * mult).toFixed(1),
+          carbs_g: +((item.carbs_g ?? 0) * mult).toFixed(1),
+          fat_g: +((item.fat_g ?? 0) * mult).toFixed(1),
+          fiber_g: +((item.fiber_g ?? 0) * mult).toFixed(1),
+          sugar_g: +((item.sugar_g ?? 0) * mult).toFixed(1),
+        } : {}),
       };
     });
     const adjustedExtras = extraItems.map((item, i) => {
       const mult = extraItemAdjustments[i]?.multiplier ?? 1.0;
-      if (mult === 1.0) return item;
       return {
         ...item,
-        calories: Math.round(item.calories * mult),
-        protein_g: +((item.protein_g ?? 0) * mult).toFixed(1),
-        carbs_g: +((item.carbs_g ?? 0) * mult).toFixed(1),
-        fat_g: +((item.fat_g ?? 0) * mult).toFixed(1),
-        fiber_g: +((item.fiber_g ?? 0) * mult).toFixed(1),
-        sugar_g: +((item.sugar_g ?? 0) * mult).toFixed(1),
+        multiplier: mult,
+        ...(mult !== 1.0 ? {
+          calories: Math.round(item.calories * mult),
+          protein_g: +((item.protein_g ?? 0) * mult).toFixed(1),
+          carbs_g: +((item.carbs_g ?? 0) * mult).toFixed(1),
+          fat_g: +((item.fat_g ?? 0) * mult).toFixed(1),
+          fiber_g: +((item.fiber_g ?? 0) * mult).toFixed(1),
+          sugar_g: +((item.sugar_g ?? 0) * mult).toFixed(1),
+        } : {}),
       };
     });
     const allItems = [...items, ...adjustedExtras];
@@ -556,6 +560,27 @@ export default function App() {
 
   const handleStartEdit = () => {
     setOriginalAnalysis(JSON.parse(JSON.stringify(analysis)));
+    // Restore multipliers from saved items and compute base values
+    const multipliers = analysis.items.map((item) => ({
+      multiplier: item.multiplier ?? 1.0,
+    }));
+    setItemAdjustments(multipliers);
+    setAnalysis((prev) => ({
+      ...prev,
+      items: prev.items.map((item) => {
+        const mult = item.multiplier ?? 1.0;
+        if (mult === 1.0) return item;
+        return {
+          ...item,
+          calories: Math.round(item.calories / mult),
+          protein_g: +((item.protein_g ?? 0) / mult).toFixed(1),
+          carbs_g: +((item.carbs_g ?? 0) / mult).toFixed(1),
+          fat_g: +((item.fat_g ?? 0) / mult).toFixed(1),
+          fiber_g: +((item.fiber_g ?? 0) / mult).toFixed(1),
+          sugar_g: +((item.sugar_g ?? 0) / mult).toFixed(1),
+        };
+      }),
+    }));
     setIsEditingMeal(true);
   };
 

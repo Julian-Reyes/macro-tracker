@@ -70,12 +70,13 @@ model MealItem {
   mealId   String @map("meal_id")
   name     String
   portion  String
-  calories Int
-  proteinG Float  @map("protein_g")
-  carbsG   Float  @map("carbs_g")
-  fatG     Float  @map("fat_g")
-  fiberG   Float  @default(0) @map("fiber_g")
-  sugarG   Float  @default(0) @map("sugar_g")
+  calories   Int
+  proteinG   Float  @map("protein_g")
+  carbsG     Float  @map("carbs_g")
+  fatG       Float  @map("fat_g")
+  fiberG     Float  @default(0) @map("fiber_g")
+  sugarG     Float  @default(0) @map("sugar_g")
+  multiplier Float  @default(1.0)
 
   // optional link to verified nutrition data
   usdaFdcId Int? @map("usda_fdc_id")

@@ -11,6 +11,7 @@ export function normalizeItem(item) {
     fat_g: item.fatG ?? item.fat_g ?? 0,
     fiber_g: item.fiberG ?? item.fiber_g ?? 0,
     sugar_g: item.sugarG ?? item.sugar_g ?? 0,
+    multiplier: item.multiplier ?? 1.0,
   };
 }
 
