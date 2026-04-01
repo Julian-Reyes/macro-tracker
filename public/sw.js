@@ -1,4 +1,4 @@
-const CACHE_NAME = "macro-v5";
+const CACHE_NAME = "macro-v7";
 const STATIC_ASSETS = [
   "./",
   "./index.html",

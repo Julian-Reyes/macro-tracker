@@ -25,6 +25,8 @@ export default function DailyLogView({
   setAnalysis,
   setImage,
   setMealDetailMode,
+  setEditingMealId,
+  setSelectedMealType,
   handleDeleteMeal,
   resetCapture,
 }) {
@@ -376,6 +378,8 @@ export default function DailyLogView({
                         });
                         setImage(entry.imageUrl || null);
                         setMealDetailMode(true);
+                        setEditingMealId(user ? entry.id : dailyLog.indexOf(entry));
+                        setSelectedMealType(entry.mealType || entry.meal_type || "dinner");
                         setView("result");
                       }}
                     >

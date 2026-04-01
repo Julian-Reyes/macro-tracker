@@ -30,8 +30,14 @@ Respond ONLY with valid JSON (no markdown, no backticks, no preamble). Use this 
 
 Be accurate and conservative with estimates. If unsure about portion size, state your assumption in the item name. Round to 1 decimal place.`;
 
+function userPrompt(description) {
+  let text = "Analyze this food/drink and provide the full nutritional breakdown.";
+  if (description) text += `\n\nThe user describes this meal as: ${description}`;
+  return text;
+}
+
 // --- Anthropic ---
-async function analyzeWithAnthropic(base64, mediaType) {
+async function analyzeWithAnthropic(base64, mediaType, description) {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -47,7 +53,7 @@ async function analyzeWithAnthropic(base64, mediaType) {
         role: "user",
         content: [
           { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
-          { type: "text", text: "Analyze this food/drink and provide the full nutritional breakdown." },
+          { type: "text", text: userPrompt(description) },
         ],
       }],
     }),
@@ -58,7 +64,7 @@ async function analyzeWithAnthropic(base64, mediaType) {
 }
 
 // --- Gemini ---
-async function analyzeWithGemini(base64, mediaType) {
+async function analyzeWithGemini(base64, mediaType, description) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
   const res = await fetch(url, {
     method: "POST",
@@ -68,7 +74,7 @@ async function analyzeWithGemini(base64, mediaType) {
       contents: [{
         parts: [
           { inlineData: { mimeType: mediaType, data: base64 } },
-          { text: "Analyze this food/drink and provide the full nutritional breakdown." },
+          { text: userPrompt(description) },
         ],
       }],
     }),
@@ -79,7 +85,7 @@ async function analyzeWithGemini(base64, mediaType) {
 }
 
 // --- OpenAI ---
-async function analyzeWithOpenAI(base64, mediaType) {
+async function analyzeWithOpenAI(base64, mediaType, description) {
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -94,7 +100,7 @@ async function analyzeWithOpenAI(base64, mediaType) {
           role: "user",
           content: [
             { type: "image_url", image_url: { url: `data:${mediaType};base64,${base64}` } },
-            { type: "text", text: "Analyze this food/drink and provide the full nutritional breakdown." },
+            { type: "text", text: userPrompt(description) },
           ],
         },
       ],
@@ -107,7 +113,7 @@ async function analyzeWithOpenAI(base64, mediaType) {
 }
 
 // --- Ollama (local) ---
-async function analyzeWithOllama(base64, _mediaType) {
+async function analyzeWithOllama(base64, _mediaType, description) {
   const ollamaUrl = process.env.OLLAMA_URL || "http://localhost:11434";
   const res = await fetch(`${ollamaUrl}/api/chat`, {
     method: "POST",
@@ -119,7 +125,7 @@ async function analyzeWithOllama(base64, _mediaType) {
         { role: "system", content: SYSTEM_PROMPT },
         {
           role: "user",
-          content: "Analyze this food/drink and provide the full nutritional breakdown.",
+          content: userPrompt(description),
           images: [base64],
         },
       ],
@@ -138,7 +144,7 @@ const providers = {
   ollama: analyzeWithOllama,
 };
 
-export async function analyzeFood(base64, mediaType, provider) {
+export async function analyzeFood(base64, mediaType, provider, description) {
   const providerName = provider || process.env.AI_PROVIDER || "gemini";
   const analyzeFn = providers[providerName];
 
@@ -146,7 +152,7 @@ export async function analyzeFood(base64, mediaType, provider) {
     throw new Error(`Unknown provider: ${providerName}. Use: ${Object.keys(providers).join(", ")}`);
   }
 
-  const raw = await analyzeFn(base64, mediaType);
+  const raw = await analyzeFn(base64, mediaType, description);
   const cleaned = raw.replace(/```json|```/g, "").trim();
 
   try {

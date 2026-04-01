@@ -32,7 +32,7 @@ macro-tracker/
 │       │   └── auth.js   # JWT authenticate middleware + signToken
 │       ├── routes/
 │       │   ├── auth.js   # POST /register, /login, GET /me
-│       │   ├── meals.js  # POST /, POST /scan, POST /import, GET /, GET /history/range, GET /:id, DELETE /:id
+│       │   ├── meals.js  # POST /, POST /scan, POST /import, GET /, GET /history/range, GET /:id, PUT /:id, DELETE /:id
 │       │   ├── nutrition.js  # GET /search, GET /barcode (no auth), GET /lookup (auth)
 │       │   └── goals.js  # GET /, PUT /, GET /profile, PUT /profile
 │       └── services/
@@ -122,13 +122,14 @@ All authenticated routes require `Authorization: Bearer <token>` header. Guest e
 - `GET /api/auth/me` — returns current user
 
 ### Meals
-- `POST /api/meals/analyze` — **no auth** — AI analysis only, returns result without saving (used by both guest and authenticated for analyze → edit → save flow)
+- `POST /api/meals/analyze` — **no auth** — AI analysis only, returns result without saving. Accepts optional `description` field for user-provided meal context (e.g., ingredients list) to improve AI accuracy
 - `POST /api/meals` — **auth required** — save a pre-analyzed meal with items + optional base64 image `{ items, meal_notes, image?, mediaType?, mealType?, provider? }`
 - `POST /api/meals/scan` — multipart image OR `{ image: base64, mediaType, provider? }` → analyzes + saves (legacy, not used by current frontend)
 - `POST /api/meals/import` — bulk import guest meals on registration `{ meals: [...] }`
 - `GET /api/meals?date=2026-03-20` — list meals for a day with totals
 - `GET /api/meals/history/range?from=...&to=...` — date range query
 - `GET /api/meals/:id` — single meal with items
+- `PUT /api/meals/:id` — **auth required** — update meal items, type, and notes. Deletes existing items and recreates from `{ items, mealType, meal_notes }`
 - `DELETE /api/meals/:id` — deletes meal + items
 
 ### Nutrition
@@ -162,7 +163,7 @@ Gemini is the default (free tier, no billing needed). Ollama requires a local in
 ## Current State
 
 ### What works
-- Frontend: guest mode (try before sign up), login/register screens (shown as overlay), camera/gallery capture, base64 encoding + client-side downscaling, AI analysis via backend API, results display with macro rings and item breakdown, persistent daily log (localStorage for guests, DB for authenticated), delete meals with undo toast (4-second window to undo before actual deletion), goals-based MacroRing max values, guest data migration to DB on registration, logo click navigates to fresh scan, scan state resets after adding meal to log, date-based daily view with prev/next navigation (meals and totals filtered per day for both guest and authenticated modes), meal detail view (click any logged meal to see full macro breakdown, image, item list, and notes), guest meal images persisted as downscaled data URLs in localStorage, portion editing via per-item multiplier (tap item → ×0.25 step stepper, macro rings and totals update in real-time, adjusted values saved to log), manual food entry via text search (USDA/OFF lookup with per-100g scaling, debounced search, gram-based portion input), meal type labels (Breakfast/Lunch/Dinner/Snack) with time-based auto-selection and grouped daily log, weekly summary view with interactive SVG bar chart (metric switching between calories/protein/carbs/fat, week navigation, tap bar to jump to daily view), add extra items to scanned meals (inline USDA/OFF search in result view, combined with AI-analyzed items before saving), remaining macros display on daily view ("# MACRO Remaining" format, shown only on today when meals are logged), unified ItemRow component for all food items (AI-analyzed, search-added extras, manual entries) with consistent macro bars and removable via ✕ on expand, PWA installable (manifest + service worker + Apple meta tags), goals editing UI (profile-based auto-calculation: height/weight/age/sex/activity/goal → Mifflin-St Jeor BMR → TDEE → macro split, with imperial/metric toggle and live preview), bottom tab bar navigation (Scan/Log/Stats/Goals with SVG icons, iOS safe area support, hidden during sub-views), barcode scanner for packaged foods (live camera via html5-qrcode, photo fallback via BarcodeDetector API + html5-qrcode scanFile, manual code entry — results feed into manual entry flow for portion adjustment), refactored view layer (CaptureView, ManualEntryView, BarcodeScannerView extracted from App.jsx)
+- Frontend: guest mode (try before sign up), login/register screens (shown as overlay), camera/gallery capture with optional meal description text input for improved AI accuracy, base64 encoding + client-side downscaling, AI analysis via backend API, results display with macro rings and item breakdown, persistent daily log (localStorage for guests, DB for authenticated), delete meals with undo toast (4-second window to undo before actual deletion), edit saved meals (tap meal in log → detail view → "Edit Meal" → adjust portions/items/type → "Save Changes" updates in place via PUT endpoint), goals-based MacroRing max values, guest data migration to DB on registration, logo click navigates to fresh scan, scan state resets after adding meal to log, date-based daily view with prev/next navigation (meals and totals filtered per day for both guest and authenticated modes), meal detail view (click any logged meal to see full macro breakdown, image, item list, and notes), guest meal images persisted as downscaled data URLs in localStorage, portion editing via per-item multiplier (tap item → ×0.25 step stepper, macro rings and totals update in real-time, adjusted values saved to log), manual food entry via text search (USDA/OFF lookup with per-100g scaling, debounced search, gram-based portion input), meal type labels (Breakfast/Lunch/Dinner/Snack) with time-based auto-selection and grouped daily log, weekly summary view with interactive SVG bar chart (metric switching between calories/protein/carbs/fat, week navigation, tap bar to jump to daily view), add extra items to scanned meals (inline USDA/OFF search in result view, combined with AI-analyzed items before saving), remaining macros display on daily view ("# MACRO Remaining" format, shown only on today when meals are logged), unified ItemRow component for all food items (AI-analyzed, search-added extras, manual entries) with consistent macro bars and removable via ✕ on expand, PWA installable (manifest + service worker + Apple meta tags), goals editing UI (profile-based auto-calculation: height/weight/age/sex/activity/goal → Mifflin-St Jeor BMR → TDEE → macro split, with imperial/metric toggle and live preview), bottom tab bar navigation (Scan/Log/Stats/Goals with SVG icons, iOS safe area support, hidden during sub-views), barcode scanner for packaged foods (live camera via html5-qrcode, photo fallback via BarcodeDetector API + html5-qrcode scanFile, manual code entry — results feed into manual entry flow for portion adjustment), refactored view layer (CaptureView, ManualEntryView, BarcodeScannerView extracted from App.jsx)
 - Backend: all routes working, SQLite via Prisma, AI multi-provider dispatcher, USDA + Open Food Facts lookup with DB caching (USDA searches Foundation + SR Legacy + FNDDS data types for broad coverage; OFF results filtered for English language, valid nutrition data, and rounded values), barcode lookup via OFF barcode API (cached in NutritionCache), JWT auth (crashes if JWT_SECRET missing), rate limiting on analyze + scan + search + barcode endpoints, serves static React build in production, guest analyze endpoint (no auth), bulk import endpoint for guest data migration, sanitized error messages (generic errors to client, full details server-side only)
 - Deployment: Live — frontend auto-deploys to GitHub Pages on push, backend on Fly.io (manual `fly deploy`). Fly.io volume mounts /data for SQLite + uploads
 - Dev access: Vite configured with `host: true` + `@vitejs/plugin-basic-ssl` for HTTPS LAN access (phone testing via `https://192.168.x.x:3000` — accept self-signed cert once). HTTPS required for getUserMedia, BarcodeDetector, and createImageBitmap APIs
@@ -277,6 +278,8 @@ When ready for more users:
 - [ ] Portuguese language support
 - [ ] Model switcher UI (dropdown in settings to pick AI provider)
 - [x] Goals editing UI — profile-based auto-calculation with Mifflin-St Jeor formula
+- [x] Edit saved meals — tap meal in log → edit portions/items/type → save changes via PUT endpoint
+- [x] Meal description input — optional text field on capture to supplement AI analysis with user-provided context
 - [ ] Enhance accuracy: use AI for food identification + USDA for verified macros
 - [ ] Auto-deploy backend to Fly.io via GitHub Actions (currently manual `fly deploy`)
 
@@ -293,7 +296,7 @@ When ready for more users:
 6. **Weight tracking** — Daily weigh-in log + trend line chart. Critical for users tracking cut/bulk progress
 7. **Streak & consistency** — Show logging streak (e.g., "12 day streak"), daily check marks on a calendar heatmap
 8. **Water intake tracker** — Simple +250ml button with daily target and progress ring
-9. ~~**Meal editing** — Adjust portion sizes or macros after AI analysis~~ ✅ Per-item multiplier on scan results (editing existing logged meals not yet supported)
+9. ~~**Meal editing** — Adjust portion sizes or macros after AI analysis~~ ✅ Per-item multiplier on scan results + edit saved meals (tap meal in daily log → "Edit Meal" → adjust portions, add/remove items, change meal type → "Save Changes" updates via `PUT /api/meals/:id`). Guest edits update localStorage by index via `updateGuestMeal()`
 10. ~~**Remaining macros**~~ ✅ Daily view shows "X left" / "X over" / "On target" for each macro below the MacroRings. Only displayed on today when meals are logged. Color-coded: macro color for under goal, dimmed red for over goal
 
 ### Tier 3 — Pro / monetization tier
@@ -321,7 +324,10 @@ When ready for more users:
 - Extra item multipliers: `extraItemAdjustments` state parallels `extraItems`, applied in `adjustedItems` useMemo. `updateExtraItemMultiplier()` updates, resets alongside `extraItems` in all cleanup paths
 - Manual entry flow: search foods via `searchNutrition()` (500ms debounced, errors keep previous results) → select food → adjust grams → macros scale via `per100g` data → add items → pick meal type → save with `provider: "manual"`. Manual items use `ItemRow` with MacroRing running totals
 - ItemRow component: unified display for all food items (AI-analyzed, extra search items, manual entries). Shows name, portion, calories, P/C/F macro bars. Tap to expand: AI items and extra items show ×multiplier controls + ✕ remove, manual items show ✕ only (`onMultiplierChange={null}` hides −/+ controls)
-- Guest localStorage helpers: `getGuestMeals()`/`getGuestMealsByDate()`/`addGuestMeal()`/`deleteGuestMeal()`/`clearGuestMeals()`, `importMeals()` for DB migration
+- Edit saved meals flow: tap meal in daily log → `mealDetailMode=true` + `editingMealId` set (meal ID for auth, array index for guest) → read-only detail view with "Back to Log" and "Edit Meal" buttons → `handleStartEdit()` snapshots `originalAnalysis` and sets `isEditingMeal=true` → all editing controls enabled (multipliers, add/remove items, meal type picker) → "Save Changes" calls `updateMeal()` (auth) or `updateGuestMeal()` (guest) with `adjustedItems` → "Cancel" reverts to `originalAnalysis`. The `useEffect` on `analysis` is guarded by `isEditingMeal` to prevent resetting adjustments during editing
+- Meal description: optional `mealDescription` state, shown as text input in CaptureView after image preview (before Retake/Analyze). Passed through `analyzeMeal()` → `POST /api/meals/analyze` → `analyzeFood()` → AI provider. Appended to user prompt as "The user describes this meal as: ..." when non-empty. Cleared in `resetCapture()`
+- Capture button order: Gallery (outline) → Camera (gold, center focus) → Barcode (outline) — Camera centered as primary action
+- Guest localStorage helpers: `getGuestMeals()`/`getGuestMealsByDate()`/`addGuestMeal()`/`deleteGuestMeal()`/`updateGuestMeal()`/`clearGuestMeals()`, `importMeals()` for DB migration
 - Date helpers: `toLocalDateStr()` for consistent YYYY-MM-DD in local timezone, `formatDisplayDate()` for user-facing date strings
 - Meal type helpers: `inferMealType()` auto-selects based on time of day (both frontend + backend), `groupMealsByType()` groups meals for daily log rendering in fixed order (breakfast → lunch → dinner → snack)
 - Manual meals display: no-image meals show a colored circle with first letter of food name instead of photo thumbnail

@@ -59,7 +59,8 @@ mealsRouter.post("/analyze", analyzeLimiter, upload.single("image"), async (req,
     }
 
     const provider = req.body.provider || undefined;
-    const { data: analysis, provider: usedProvider } = await analyzeFood(base64, mediaType, provider);
+    const description = req.body.description || undefined;
+    const { data: analysis, provider: usedProvider } = await analyzeFood(base64, mediaType, provider, description);
 
     res.json({ analysis, provider: usedProvider });
   } catch (err) {
@@ -314,6 +315,50 @@ mealsRouter.get("/:id", async (req, res) => {
   });
   if (!meal) return res.status(404).json({ error: "Meal not found" });
   res.json(meal);
+});
+
+// PUT /api/meals/:id - update an existing meal
+mealsRouter.put("/:id", async (req, res) => {
+  try {
+    const { items, mealType, meal_notes } = req.body;
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: "No items provided" });
+    }
+
+    const existing = await prisma.meal.findFirst({
+      where: { id: req.params.id, userId: req.userId },
+    });
+    if (!existing) return res.status(404).json({ error: "Meal not found" });
+
+    const meal = await prisma.$transaction(async (tx) => {
+      await tx.mealItem.deleteMany({ where: { mealId: existing.id } });
+      return tx.meal.update({
+        where: { id: existing.id },
+        data: {
+          mealType: mealType ?? existing.mealType,
+          mealNotes: meal_notes ?? existing.mealNotes,
+          items: {
+            create: items.map((item) => ({
+              name: item.name,
+              portion: item.portion,
+              calories: item.calories,
+              proteinG: item.protein_g ?? item.proteinG ?? 0,
+              carbsG: item.carbs_g ?? item.carbsG ?? 0,
+              fatG: item.fat_g ?? item.fatG ?? 0,
+              fiberG: item.fiber_g ?? item.fiberG ?? 0,
+              sugarG: item.sugar_g ?? item.sugarG ?? 0,
+            })),
+          },
+        },
+        include: { items: true },
+      });
+    });
+
+    res.json({ meal });
+  } catch (err) {
+    console.error("Update meal error:", err);
+    res.status(500).json({ error: "Failed to update meal" });
+  }
 });
 
 // DELETE /api/meals/:id

@@ -51,7 +51,13 @@ export default function CaptureView({
   setMealDetailMode,
   setAnalysis,
   setImage,
+  mealDescription,
+  setMealDescription,
   onBarcodeScan,
+  isEditing,
+  onStartEdit,
+  onCancelEdit,
+  onSaveEdit,
 }) {
   return (
     <div style={{ animation: "fadeSlideIn 0.3s ease-out" }}>
@@ -229,6 +235,39 @@ export default function CaptureView({
                   ✕
                 </button>
               )}
+            </div>
+          )}
+
+          {/* Meal description (optional) */}
+          {!analysis && !loading && (
+            <div style={{ padding: "12px 20px 0" }}>
+              <input
+                type="text"
+                value={mealDescription}
+                onChange={(e) => setMealDescription(e.target.value)}
+                placeholder="Describe your meal (optional)"
+                style={{
+                  width: "100%",
+                  padding: "12px 16px",
+                  borderRadius: "12px",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  background: "rgba(255,255,255,0.04)",
+                  color: "#fff",
+                  fontSize: "13px",
+                  fontFamily: "'DM Sans',sans-serif",
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+              <p
+                style={{
+                  fontSize: "11px",
+                  color: "rgba(255,255,255,0.2)",
+                  margin: "6px 0 0",
+                }}
+              >
+                e.g. "turkey sandwich with swiss cheese, lettuce, mayo on sourdough"
+              </p>
             </div>
           )}
 
@@ -428,7 +467,7 @@ export default function CaptureView({
                   >
                     Breakdown
                   </span>
-                  {!mealDetailMode && (
+                  {(!mealDetailMode || isEditing) && (
                     <span
                       style={{
                         fontSize: "10px",
@@ -448,7 +487,7 @@ export default function CaptureView({
                       key={i}
                       item={item}
                       index={i}
-                      editable={!mealDetailMode}
+                      editable={!mealDetailMode || isEditing}
                       expanded={expandedItemIndex === i}
                       multiplier={itemAdjustments[i]?.multiplier ?? 1.0}
                       onToggle={() =>
@@ -472,7 +511,7 @@ export default function CaptureView({
                       key={`extra-${i}`}
                       item={extraAdj}
                       index={analysis.items.length + i}
-                      editable={!mealDetailMode}
+                      editable={!mealDetailMode || isEditing}
                       expanded={expandedExtraIndex === i}
                       multiplier={
                         extraItemAdjustments[i]?.multiplier ?? 1.0
@@ -489,7 +528,7 @@ export default function CaptureView({
                     />
                   );
                 })}
-                {!mealDetailMode && (
+                {(!mealDetailMode || isEditing) && (
                   <div style={{ padding: "12px 20px" }}>
                     {!addingExtraItem ? (
                       <button
@@ -887,8 +926,8 @@ export default function CaptureView({
                 </div>
               )}
 
-              {/* Meal Type Picker (only for fresh scans) */}
-              {!mealDetailMode && (
+              {/* Meal Type Picker */}
+              {(!mealDetailMode || isEditing) && (
                 <MealTypePicker
                   value={selectedMealType}
                   onChange={setSelectedMealType}
@@ -903,7 +942,7 @@ export default function CaptureView({
                   gap: "12px",
                 }}
               >
-                {mealDetailMode ? (
+                {mealDetailMode && !isEditing ? (
                   <>
                     <button
                       onClick={() => {
@@ -927,7 +966,7 @@ export default function CaptureView({
                       ← Back to Log
                     </button>
                     <button
-                      onClick={resetCapture}
+                      onClick={onStartEdit}
                       style={{
                         flex: 1,
                         padding: "14px",
@@ -942,7 +981,44 @@ export default function CaptureView({
                         fontFamily: "'DM Sans',sans-serif",
                       }}
                     >
-                      New Scan
+                      Edit Meal
+                    </button>
+                  </>
+                ) : mealDetailMode && isEditing ? (
+                  <>
+                    <button
+                      onClick={onCancelEdit}
+                      style={{
+                        flex: 1,
+                        padding: "14px",
+                        borderRadius: "12px",
+                        cursor: "pointer",
+                        border: "1px solid rgba(255,255,255,0.1)",
+                        background: "transparent",
+                        color: "#fff",
+                        fontSize: "13px",
+                        fontFamily: "'DM Sans',sans-serif",
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={onSaveEdit}
+                      style={{
+                        flex: 1,
+                        padding: "14px",
+                        borderRadius: "12px",
+                        border: "none",
+                        cursor: "pointer",
+                        background:
+                          "linear-gradient(135deg, #7BE0AD, #4CB97A)",
+                        color: "#0C0C0E",
+                        fontSize: "13px",
+                        fontWeight: 700,
+                        fontFamily: "'DM Sans',sans-serif",
+                      }}
+                    >
+                      Save Changes
                     </button>
                   </>
                 ) : (

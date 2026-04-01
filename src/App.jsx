@@ -6,6 +6,7 @@ import {
   clearToken,
   getMe,
   saveMeal,
+  updateMeal,
   getMeals,
   getMealsRange,
   deleteMeal,
@@ -16,6 +17,7 @@ import {
   getGuestMealsByDate,
   addGuestMeal,
   deleteGuestMeal,
+  updateGuestMeal,
   searchNutrition,
   lookupBarcode,
 } from "./api";
@@ -54,6 +56,9 @@ export default function App() {
   });
   const [view, setView] = useState("capture");
   const [mealDetailMode, setMealDetailMode] = useState(false);
+  const [editingMealId, setEditingMealId] = useState(null);
+  const [isEditingMeal, setIsEditingMeal] = useState(false);
+  const [originalAnalysis, setOriginalAnalysis] = useState(null);
   const [scaledImageData, setScaledImageData] = useState(null);
   const [expandedItemIndex, setExpandedItemIndex] = useState(null);
   const [itemAdjustments, setItemAdjustments] = useState([]);
@@ -73,6 +78,7 @@ export default function App() {
   const [extraItemAdjustments, setExtraItemAdjustments] = useState([]);
   const [expandedExtraIndex, setExpandedExtraIndex] = useState(null);
   const [addingExtraItem, setAddingExtraItem] = useState(false);
+  const [mealDescription, setMealDescription] = useState("");
   // Barcode scanner state
   const [barcodeScanning, setBarcodeScanning] = useState(false);
   const [barcodeLoading, setBarcodeLoading] = useState(false);
@@ -237,16 +243,18 @@ export default function App() {
   // Initialize adjustments and meal type when analysis changes
   useEffect(() => {
     if (analysis) {
-      setItemAdjustments(analysis.items.map(() => ({ multiplier: 1.0 })));
-      setExpandedItemIndex(null);
-      setExtraItems([]);
-      setExtraItemAdjustments([]);
-      setAddingExtraItem(false);
+      if (!isEditingMeal) {
+        setItemAdjustments(analysis.items.map(() => ({ multiplier: 1.0 })));
+        setExpandedItemIndex(null);
+        setExtraItems([]);
+        setExtraItemAdjustments([]);
+        setAddingExtraItem(false);
+      }
       if (!mealDetailMode) setSelectedMealType(inferMealType());
     } else {
       setItemAdjustments([]);
     }
-  }, [analysis, mealDetailMode]);
+  }, [analysis, mealDetailMode, isEditingMeal]);
 
   // Compute adjusted items and totals based on multipliers
   const scaledImageUrl = scaledImageData
@@ -370,7 +378,7 @@ export default function App() {
       setScaledImageData(scaled);
 
       // Analyze only — save happens in addToDaily after user can edit portions
-      const result = await analyzeMeal(scaled.base64, scaled.mediaType);
+      const result = await analyzeMeal(scaled.base64, scaled.mediaType, mealDescription.trim() || undefined);
       setAnalysis({
         items: result.analysis.items,
         totals: result.analysis.totals,
@@ -546,6 +554,57 @@ export default function App() {
     }
   };
 
+  const handleStartEdit = () => {
+    setOriginalAnalysis(JSON.parse(JSON.stringify(analysis)));
+    setIsEditingMeal(true);
+  };
+
+  const handleCancelEdit = () => {
+    setAnalysis(originalAnalysis);
+    setIsEditingMeal(false);
+    setOriginalAnalysis(null);
+    setExtraItems([]);
+    setExtraItemAdjustments([]);
+    setAddingExtraItem(false);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!adjustedItems || editingMealId == null) return;
+    try {
+      if (isGuest) {
+        updateGuestMeal(editingMealId, {
+          items: adjustedItems,
+          meal_notes: analysis.meal_notes,
+          mealType: selectedMealType,
+        });
+      } else {
+        await updateMeal(
+          editingMealId,
+          adjustedItems,
+          analysis.meal_notes,
+          selectedMealType,
+        );
+      }
+    } catch {
+      setError("Failed to update meal");
+      return;
+    }
+    setImage(null);
+    setImageData(null);
+    setAnalysis(null);
+    setError(null);
+    setScaledImageData(null);
+    setMealDetailMode(false);
+    setIsEditingMeal(false);
+    setEditingMealId(null);
+    setOriginalAnalysis(null);
+    setExtraItems([]);
+    setExtraItemAdjustments([]);
+    setAddingExtraItem(false);
+    setView("daily");
+    refreshData();
+  };
+
   const resetCapture = () => {
     setImage(null);
     setImageData(null);
@@ -553,6 +612,10 @@ export default function App() {
     setError(null);
     setScaledImageData(null);
     setMealDetailMode(false);
+    setEditingMealId(null);
+    setIsEditingMeal(false);
+    setOriginalAnalysis(null);
+    setMealDescription("");
     setManualQuery("");
     setManualResults([]);
     setManualItems([]);
@@ -877,6 +940,8 @@ export default function App() {
           manualGrams={manualGrams}
           scaledFoodMacros={scaledFoodMacros}
           goals={goals}
+          mealDescription={mealDescription}
+          setMealDescription={setMealDescription}
           fileInputRef={fileInputRef}
           cameraInputRef={cameraInputRef}
           handleFile={handleFile}
@@ -904,6 +969,10 @@ export default function App() {
           setAnalysis={setAnalysis}
           setImage={setImage}
           onBarcodeScan={() => setBarcodeScanning(true)}
+          isEditing={isEditingMeal}
+          onStartEdit={handleStartEdit}
+          onCancelEdit={handleCancelEdit}
+          onSaveEdit={handleSaveEdit}
         />
       )}
 
@@ -976,6 +1045,8 @@ export default function App() {
           setAnalysis={setAnalysis}
           setImage={setImage}
           setMealDetailMode={setMealDetailMode}
+          setEditingMealId={setEditingMealId}
+          setSelectedMealType={setSelectedMealType}
           handleDeleteMeal={handleDeleteMeal}
           resetCapture={resetCapture}
         />

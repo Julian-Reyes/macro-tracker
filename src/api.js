@@ -103,6 +103,13 @@ export async function lookupBarcode(code) {
   return data.result;
 }
 
+export async function updateMeal(id, items, mealNotes, mealType) {
+  return apiFetch(`/meals/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ items, meal_notes: mealNotes, mealType }),
+  });
+}
+
 export async function deleteMeal(id) {
   return apiFetch(`/meals/${id}`, { method: 'DELETE' });
 }
@@ -115,11 +122,11 @@ export async function importMeals(meals) {
 }
 
 // --- Meals (guest, no auth) ---
-export async function analyzeMeal(base64, mediaType) {
+export async function analyzeMeal(base64, mediaType, description) {
   const res = await fetch(`${API_BASE}/meals/analyze`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image: base64, mediaType }),
+    body: JSON.stringify({ image: base64, mediaType, description: description || undefined }),
   });
   const data = await res.json();
   if (!res.ok) throw { status: res.status, message: data.error || 'Analysis failed' };
@@ -156,6 +163,14 @@ export function deleteGuestMeal(index) {
   const meals = getGuestMeals();
   meals.splice(index, 1);
   localStorage.setItem(GUEST_MEALS_KEY, JSON.stringify(meals));
+}
+
+export function updateGuestMeal(index, updatedMeal) {
+  const meals = getGuestMeals();
+  if (index >= 0 && index < meals.length) {
+    meals[index] = { ...meals[index], ...updatedMeal };
+    localStorage.setItem(GUEST_MEALS_KEY, JSON.stringify(meals));
+  }
 }
 
 export function clearGuestMeals() {
