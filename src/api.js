@@ -110,6 +110,21 @@ export async function updateMeal(id, items, mealNotes, mealType) {
   });
 }
 
+export async function getRecentMeals(days = 14) {
+  return apiFetch(`/meals/recent?days=${days}`);
+}
+
+export async function getFavoriteMeals() {
+  return apiFetch('/meals/favorites');
+}
+
+export async function toggleMealFavorite(id, isFavorite) {
+  return apiFetch(`/meals/${id}/favorite`, {
+    method: 'PATCH',
+    body: JSON.stringify({ isFavorite }),
+  });
+}
+
 export async function deleteMeal(id) {
   return apiFetch(`/meals/${id}`, { method: 'DELETE' });
 }
@@ -138,7 +153,18 @@ const GUEST_MEALS_KEY = 'macro_guest_meals';
 
 export function getGuestMeals() {
   const raw = localStorage.getItem(GUEST_MEALS_KEY);
-  return raw ? JSON.parse(raw) : [];
+  if (!raw) return [];
+  const meals = JSON.parse(raw);
+  // Backfill localId for older guest meals
+  let changed = false;
+  for (const m of meals) {
+    if (!m.localId) {
+      m.localId = `guest_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      changed = true;
+    }
+  }
+  if (changed) localStorage.setItem(GUEST_MEALS_KEY, JSON.stringify(meals));
+  return meals;
 }
 
 export function getGuestMealsByDate(dateStr) {
@@ -155,7 +181,12 @@ export function getGuestMealsByDate(dateStr) {
 
 export function addGuestMeal(meal) {
   const meals = getGuestMeals();
-  meals.push({ ...meal, scannedAt: new Date().toISOString() });
+  meals.push({
+    ...meal,
+    localId: `guest_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    scannedAt: new Date().toISOString(),
+    isFavorite: meal.isFavorite || false,
+  });
   localStorage.setItem(GUEST_MEALS_KEY, JSON.stringify(meals));
 }
 
@@ -171,6 +202,34 @@ export function updateGuestMeal(index, updatedMeal) {
     meals[index] = { ...meals[index], ...updatedMeal };
     localStorage.setItem(GUEST_MEALS_KEY, JSON.stringify(meals));
   }
+}
+
+export function toggleGuestMealFavorite(localId) {
+  const meals = getGuestMeals();
+  const meal = meals.find(m => m.localId === localId);
+  if (meal) {
+    meal.isFavorite = !meal.isFavorite;
+    localStorage.setItem(GUEST_MEALS_KEY, JSON.stringify(meals));
+  }
+}
+
+export function getGuestFavoriteMeals() {
+  return getGuestMeals().filter(m => m.isFavorite);
+}
+
+export function getGuestRecentMeals(days = 14) {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - days);
+  const meals = getGuestMeals()
+    .filter(m => new Date(m.scannedAt) >= cutoff)
+    .sort((a, b) => new Date(b.scannedAt) - new Date(a.scannedAt));
+  const seen = new Set();
+  return meals.filter(m => {
+    const fp = (m.items || []).map(i => i.name.trim().toLowerCase()).sort().join('|');
+    if (seen.has(fp)) return false;
+    seen.add(fp);
+    return true;
+  }).slice(0, 20);
 }
 
 export function clearGuestMeals() {
@@ -191,6 +250,22 @@ export async function saveProfile(profileData) {
     method: 'PUT',
     body: JSON.stringify(profileData),
   });
+}
+
+// --- Guest Goals (localStorage) ---
+const GUEST_GOALS_KEY = 'macro_guest_goals';
+
+export function getGuestGoals() {
+  const raw = localStorage.getItem(GUEST_GOALS_KEY);
+  return raw ? JSON.parse(raw) : null;
+}
+
+export function saveGuestGoals(profile, goals) {
+  localStorage.setItem(GUEST_GOALS_KEY, JSON.stringify({ profile, goals }));
+}
+
+export function clearGuestGoals() {
+  localStorage.removeItem(GUEST_GOALS_KEY);
 }
 
 // --- Image downscaling ---

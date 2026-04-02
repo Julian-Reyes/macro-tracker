@@ -120,7 +120,7 @@ mealsRouter.post("/import", importLimiter, async (req, res) => {
 // POST /api/meals - save a pre-analyzed meal (after user edits portions)
 mealsRouter.post("/", async (req, res) => {
   try {
-    const { items, meal_notes, image, mediaType, mealType } = req.body;
+    const { items, meal_notes, image, mediaType, mealType, isFavorite } = req.body;
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: "No items provided" });
     }
@@ -145,6 +145,7 @@ mealsRouter.post("/", async (req, res) => {
         mealNotes: meal_notes || null,
         provider: req.body.provider || "gemini",
         mealType: mealType || inferMealType(new Date()),
+        isFavorite: isFavorite || false,
         items: {
           create: items.map((item) => ({
             name: item.name,
@@ -306,6 +307,73 @@ mealsRouter.get("/history/range", async (req, res) => {
     res.json(meals);
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch history" });
+  }
+});
+
+// GET /api/meals/favorites - all favorited meals
+mealsRouter.get("/favorites", async (req, res) => {
+  try {
+    const meals = await prisma.meal.findMany({
+      where: { userId: req.userId, isFavorite: true },
+      include: { items: true },
+      orderBy: { scannedAt: "desc" },
+    });
+    res.json(meals);
+  } catch (err) {
+    console.error("Favorites error:", err);
+    res.status(500).json({ error: "Failed to fetch favorites" });
+  }
+});
+
+// GET /api/meals/recent?days=14 - deduplicated recent meals
+mealsRouter.get("/recent", async (req, res) => {
+  try {
+    const days = parseInt(req.query.days) || 14;
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+
+    const meals = await prisma.meal.findMany({
+      where: { userId: req.userId, scannedAt: { gte: since } },
+      include: { items: true },
+      orderBy: { scannedAt: "desc" },
+    });
+
+    // Deduplicate by sorted item name fingerprint
+    const seen = new Set();
+    const deduplicated = meals.filter((meal) => {
+      const fp = meal.items
+        .map((i) => i.name.trim().toLowerCase())
+        .sort()
+        .join("|");
+      if (seen.has(fp)) return false;
+      seen.add(fp);
+      return true;
+    });
+
+    res.json(deduplicated.slice(0, 20));
+  } catch (err) {
+    console.error("Recent meals error:", err);
+    res.status(500).json({ error: "Failed to fetch recent meals" });
+  }
+});
+
+// PATCH /api/meals/:id/favorite - toggle favorite status
+mealsRouter.patch("/:id/favorite", async (req, res) => {
+  try {
+    const { isFavorite } = req.body;
+    const existing = await prisma.meal.findFirst({
+      where: { id: req.params.id, userId: req.userId },
+    });
+    if (!existing) return res.status(404).json({ error: "Meal not found" });
+
+    const meal = await prisma.meal.update({
+      where: { id: existing.id },
+      data: { isFavorite: !!isFavorite },
+    });
+    res.json({ meal });
+  } catch (err) {
+    console.error("Toggle favorite error:", err);
+    res.status(500).json({ error: "Failed to update favorite" });
   }
 });
 

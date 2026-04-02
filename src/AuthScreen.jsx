@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { login, register, getGuestMeals, importMeals, clearGuestMeals } from "./api";
+import { login, register, getGuestMeals, importMeals, clearGuestMeals, getGuestGoals, saveProfile, clearGuestGoals } from "./api";
 
 export default function AuthScreen({ onAuth }) {
   const [mode, setMode] = useState("login");
@@ -27,6 +27,17 @@ export default function AuthScreen({ onAuth }) {
           clearGuestMeals();
         } catch (importErr) {
           console.error("Guest meal migration failed:", importErr);
+        }
+      }
+
+      // Migrate guest goals to DB
+      const guestGoals = getGuestGoals();
+      if (guestGoals?.profile) {
+        try {
+          await saveProfile(guestGoals.profile);
+          clearGuestGoals();
+        } catch (goalsErr) {
+          console.error("Guest goals migration failed:", goalsErr);
         }
       }
 

@@ -20,6 +20,14 @@ import {
   updateGuestMeal,
   searchNutrition,
   lookupBarcode,
+  getRecentMeals,
+  getFavoriteMeals,
+  toggleMealFavorite,
+  toggleGuestMealFavorite,
+  getGuestFavoriteMeals,
+  getGuestRecentMeals,
+  getGuestGoals,
+  clearGuestGoals,
 } from "./api";
 import { toLocalDateStr, inferMealType, getWeekStartMonday, getWeekDays } from "./utils/dates";
 import { normalizeItem, computeDailyTotals } from "./utils/meals";
@@ -79,6 +87,9 @@ export default function App() {
   const [expandedExtraIndex, setExpandedExtraIndex] = useState(null);
   const [addingExtraItem, setAddingExtraItem] = useState(false);
   const [mealDescription, setMealDescription] = useState("");
+  // Quick add (favorites + recents)
+  const [recentMeals, setRecentMeals] = useState([]);
+  const [favoriteMeals, setFavoriteMeals] = useState([]);
   // Barcode scanner state
   const [barcodeScanning, setBarcodeScanning] = useState(false);
   const [barcodeLoading, setBarcodeLoading] = useState(false);
@@ -178,8 +189,11 @@ export default function App() {
       getGoals()
         .then((g) => setGoals(g))
         .catch(() => {});
+    } else if (!authChecking) {
+      const guestGoals = getGuestGoals();
+      if (guestGoals?.goals) setGoals(guestGoals.goals);
     }
-  }, [user, refreshData]);
+  }, [user, authChecking, refreshData]);
 
   // Load weekly data
   const loadWeeklyData = useCallback(async () => {
@@ -239,6 +253,29 @@ export default function App() {
   useEffect(() => {
     if (view === "weekly") loadWeeklyData();
   }, [view, weekStart, loadWeeklyData]);
+
+  // Load quick-add data (favorites + recents) when switching to capture view
+  const loadQuickAddData = useCallback(async () => {
+    try {
+      if (user) {
+        const [recents, favorites] = await Promise.all([
+          getRecentMeals(),
+          getFavoriteMeals(),
+        ]);
+        setRecentMeals(recents);
+        setFavoriteMeals(favorites);
+      } else {
+        setRecentMeals(getGuestRecentMeals());
+        setFavoriteMeals(getGuestFavoriteMeals());
+      }
+    } catch {
+      // Quick add is a convenience — fail silently
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (view === "capture") loadQuickAddData();
+  }, [view, loadQuickAddData]);
 
   // Initialize adjustments and meal type when analysis changes
   useEffect(() => {
@@ -630,6 +667,58 @@ export default function App() {
     refreshData();
   };
 
+  const handleRelogMeal = (meal) => {
+    const items = (meal.items || []).map(normalizeItem);
+    const totals = items.reduce(
+      (acc, it) => ({
+        calories: acc.calories + it.calories,
+        protein_g: +(acc.protein_g + it.protein_g).toFixed(1),
+        carbs_g: +(acc.carbs_g + it.carbs_g).toFixed(1),
+        fat_g: +(acc.fat_g + it.fat_g).toFixed(1),
+        fiber_g: +(acc.fiber_g + it.fiber_g).toFixed(1),
+        sugar_g: +(acc.sugar_g + it.sugar_g).toFixed(1),
+      }),
+      { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0, sugar_g: 0 },
+    );
+    setAnalysis({ items, totals, meal_notes: meal.mealNotes || meal.meal_notes });
+    setImage(meal.imageUrl || null);
+    setScaledImageData(null);
+    setMealDetailMode(false);
+    setEditingMealId(null);
+    setIsEditingMeal(false);
+    setSelectedMealType(inferMealType());
+    setView("result");
+  };
+
+  const handleToggleFavorite = async (mealIdOrLocalId) => {
+    // Find the meal and its current favorite state before any updates
+    const matchId = (m) =>
+      (user ? m.id : m.localId) === mealIdOrLocalId;
+    const target = dailyLog.find(matchId);
+    const newFav = target ? !target.isFavorite : true;
+
+    // Optimistically update dailyLog so star changes immediately
+    setDailyLog(
+      dailyLog.map((m) => (matchId(m) ? { ...m, isFavorite: newFav } : m)),
+    );
+
+    try {
+      if (user) {
+        await toggleMealFavorite(mealIdOrLocalId, newFav);
+        loadQuickAddData();
+      } else {
+        toggleGuestMealFavorite(mealIdOrLocalId);
+        setFavoriteMeals(getGuestFavoriteMeals());
+        setRecentMeals(getGuestRecentMeals());
+      }
+    } catch {
+      // Revert on failure
+      setDailyLog(
+        dailyLog.map((m) => (matchId(m) ? { ...m, isFavorite: !newFav } : m)),
+      );
+    }
+  };
+
   const resetCapture = () => {
     setImage(null);
     setImageData(null);
@@ -718,7 +807,8 @@ export default function App() {
       fiber_g: 0,
       sugar_g: 0,
     });
-    setGoals({ calories: 2200, proteinG: 150, carbsG: 275, fatG: 75 });
+    const guestGoals = getGuestGoals();
+    setGoals(guestGoals?.goals || { calories: 2200, proteinG: 150, carbsG: 275, fatG: 75 });
     setView("capture");
   };
 
@@ -998,6 +1088,10 @@ export default function App() {
           onStartEdit={handleStartEdit}
           onCancelEdit={handleCancelEdit}
           onSaveEdit={handleSaveEdit}
+          recentMeals={recentMeals}
+          favoriteMeals={favoriteMeals}
+          onRelogMeal={handleRelogMeal}
+          onToggleFavorite={handleToggleFavorite}
         />
       )}
 
@@ -1074,83 +1168,19 @@ export default function App() {
           setSelectedMealType={setSelectedMealType}
           handleDeleteMeal={handleDeleteMeal}
           resetCapture={resetCapture}
+          onToggleFavorite={handleToggleFavorite}
         />
       )}
 
 
       {/* Goals/Settings View */}
-      {view === "settings" &&
-        (user ? (
-          <GoalsScreen
-            goals={goals}
-            onSave={(newGoals) => setGoals(newGoals)}
-          />
-        ) : (
-          <div style={{ position: "relative" }}>
-            <div
-              style={{
-                opacity: 0.3,
-                pointerEvents: "none",
-                filter: "blur(1px)",
-              }}
-            >
-              <GoalsScreen goals={goals} onSave={() => {}} />
-            </div>
-            <div
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                display: "flex",
-                alignItems: "flex-start",
-                justifyContent: "center",
-                paddingTop: "120px",
-              }}
-            >
-              <div
-                style={{
-                  background: "#1a1a1e",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  borderRadius: "16px",
-                  padding: "24px 28px",
-                  textAlign: "center",
-                  maxWidth: "320px",
-                  boxShadow: "0 12px 40px rgba(0,0,0,0.6)",
-                }}
-              >
-                <div style={{ fontSize: "32px", marginBottom: "12px" }}>🎯</div>
-                <p
-                  style={{
-                    fontSize: "14px",
-                    color: "rgba(255,255,255,0.7)",
-                    lineHeight: 1.5,
-                    marginBottom: "16px",
-                  }}
-                >
-                  Please create an account or login to use the Goals feature
-                </p>
-                <button
-                  onClick={() => setShowAuth(true)}
-                  style={{
-                    padding: "12px 24px",
-                    borderRadius: "12px",
-                    border: "none",
-                    cursor: "pointer",
-                    background: "rgba(232,200,114,0.15)",
-                    color: "#E8C872",
-                    fontSize: "14px",
-                    fontWeight: 700,
-                    fontFamily: "'DM Sans',sans-serif",
-                  }}
-                >
-                  Login / Sign Up
-                </button>
-              </div>
-            </div>
-          </div>
-        ))}
+      {view === "settings" && (
+        <GoalsScreen
+          goals={goals}
+          onSave={(newGoals) => setGoals(newGoals)}
+          isGuest={!user}
+        />
+      )}
 
       {/* Delete undo toast */}
       {deleteToast && (

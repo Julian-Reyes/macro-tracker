@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { getProfile, saveProfile } from "./api";
+import { getProfile, saveProfile, getGuestGoals, saveGuestGoals } from "./api";
 
 const ACTIVITY_LEVELS = [
   { value: "sedentary", label: "Sedentary", desc: "Little or no exercise" },
@@ -49,7 +49,7 @@ const ftInToCm = (ft, inches) => Math.round((ft * 30.48) + (inches * 2.54));
 const kgToLbs = (kg) => Math.round(kg * 2.205);
 const lbsToKg = (lbs) => +(lbs / 2.205).toFixed(1);
 
-export default function GoalsScreen({ goals, onSave }) {
+export default function GoalsScreen({ goals, onSave, isGuest }) {
   const [sex, setSex] = useState("");
   const [age, setAge] = useState("");
   const [heightCm, setHeightCm] = useState("");
@@ -69,7 +69,13 @@ export default function GoalsScreen({ goals, onSave }) {
   useEffect(() => {
     (async () => {
       try {
-        const profile = await getProfile();
+        let profile;
+        if (isGuest) {
+          const stored = getGuestGoals();
+          profile = stored?.profile;
+        } else {
+          profile = await getProfile();
+        }
         if (profile && profile.heightCm) {
           setSex(profile.sex || "");
           setAge(profile.age?.toString() || "");
@@ -92,7 +98,7 @@ export default function GoalsScreen({ goals, onSave }) {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [isGuest]);
 
   // Sync units when toggling imperial/metric
   const handleUnitToggle = () => {
@@ -127,15 +133,27 @@ export default function GoalsScreen({ goals, onSave }) {
     try {
       const h = useImperial ? ftInToCm(+heightFt || 0, +heightIn || 0) : +heightCm;
       const w = useImperial ? lbsToKg(+weightLbs) : +weightKg;
-      const result = await saveProfile({
-        heightCm: h, weightKg: w, age: +age, sex, activityLevel, goalType,
-      });
-      onSave({
-        calories: result.goals.calories,
-        proteinG: result.goals.proteinG,
-        carbsG: result.goals.carbsG,
-        fatG: result.goals.fatG,
-      });
+      const profileData = { heightCm: h, weightKg: w, age: +age, sex, activityLevel, goalType };
+
+      if (isGuest) {
+        const calculated = calcMacros(profileData);
+        const goalsData = {
+          calories: calculated.calories,
+          proteinG: calculated.proteinG,
+          carbsG: calculated.carbsG,
+          fatG: calculated.fatG,
+        };
+        saveGuestGoals(profileData, goalsData);
+        onSave(goalsData);
+      } else {
+        const result = await saveProfile(profileData);
+        onSave({
+          calories: result.goals.calories,
+          proteinG: result.goals.proteinG,
+          carbsG: result.goals.carbsG,
+          fatG: result.goals.fatG,
+        });
+      }
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err) {

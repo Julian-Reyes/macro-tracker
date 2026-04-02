@@ -55,8 +55,9 @@ model Meal {
   imageUrl  String?  @map("image_url")
   mealNotes String?  @map("meal_notes")
   provider  String   @default("anthropic") // which AI analyzed it — "manual" for text entries
-  mealType  String?  @map("meal_type")    // breakfast | lunch | dinner | snack
-  scannedAt DateTime @default(now()) @map("scanned_at")
+  mealType   String?  @map("meal_type")    // breakfast | lunch | dinner | snack
+  isFavorite Boolean  @default(false) @map("is_favorite")
+  scannedAt  DateTime @default(now()) @map("scanned_at")
 
   user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   items MealItem[]

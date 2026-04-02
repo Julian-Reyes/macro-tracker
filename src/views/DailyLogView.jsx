@@ -29,6 +29,7 @@ export default function DailyLogView({
   setSelectedMealType,
   handleDeleteMeal,
   resetCapture,
+  onToggleFavorite,
 }) {
   return (
     <div style={{ animation: "fadeSlideIn 0.3s ease-out" }}>
@@ -447,11 +448,40 @@ export default function DailyLogView({
                           fontSize: "12px",
                           color: "rgba(255,255,255,0.2)",
                           flexShrink: 0,
-                          marginRight: "8px",
+                          marginRight: "4px",
                         }}
                       >
                         {time}
                       </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleFavorite(
+                            user ? entry.id : entry.localId,
+                          );
+                        }}
+                        style={{
+                          width: "24px",
+                          height: "24px",
+                          borderRadius: "50%",
+                          border: "none",
+                          cursor: "pointer",
+                          background: entry.isFavorite
+                            ? "rgba(232,200,114,0.15)"
+                            : "rgba(255,255,255,0.04)",
+                          color: entry.isFavorite
+                            ? "#E8C872"
+                            : "rgba(255,255,255,0.2)",
+                          fontSize: "12px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
+                          marginRight: "4px",
+                        }}
+                      >
+                        {entry.isFavorite ? "★" : "☆"}
+                      </button>
                       <button
                         onClick={(e) =>
                           handleDeleteMeal(e, user ? entry.id : i)

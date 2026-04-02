@@ -1,6 +1,7 @@
 import MacroRing from "../components/MacroRing";
 import ItemRow from "../components/ItemRow";
 import MealTypePicker from "../components/MealTypePicker";
+import QuickAddSection from "../components/QuickAddSection";
 
 export default function CaptureView({
   view,
@@ -58,6 +59,10 @@ export default function CaptureView({
   onStartEdit,
   onCancelEdit,
   onSaveEdit,
+  recentMeals,
+  favoriteMeals,
+  onRelogMeal,
+  onToggleFavorite,
 }) {
   return (
     <div style={{ animation: "fadeSlideIn 0.3s ease-out" }}>
@@ -171,6 +176,13 @@ export default function CaptureView({
             accept="image/*"
             onChange={(e) => handleFile(e.target.files?.[0])}
             style={{ display: "none" }}
+          />
+
+          <QuickAddSection
+            favoriteMeals={favoriteMeals || []}
+            recentMeals={recentMeals || []}
+            onRelogMeal={onRelogMeal}
+            onToggleFavorite={onToggleFavorite}
           />
 
           <button
