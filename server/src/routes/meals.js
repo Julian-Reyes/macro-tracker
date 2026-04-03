@@ -244,8 +244,10 @@ mealsRouter.get("/", async (req, res) => {
     let startOfDay, endOfDay;
 
     if (dateStr) {
+      const tzOffset = parseInt(req.query.tz) || 0;
       startOfDay = new Date(`${dateStr}T00:00:00.000Z`);
-      endOfDay = new Date(`${dateStr}T23:59:59.999Z`);
+      startOfDay.setMinutes(startOfDay.getMinutes() + tzOffset);
+      endOfDay = new Date(startOfDay.getTime() + 86400000 - 1);
     } else {
       // Default to today
       const now = new Date();
@@ -292,13 +294,17 @@ mealsRouter.get("/history/range", async (req, res) => {
     const { from, to } = req.query;
     if (!from || !to) return res.status(400).json({ error: "from and to required" });
 
+    const tzOffset = parseInt(req.query.tz) || 0;
+    const startOfRange = new Date(`${from}T00:00:00.000Z`);
+    startOfRange.setMinutes(startOfRange.getMinutes() + tzOffset);
+    const endOfRange = new Date(`${to}T00:00:00.000Z`);
+    endOfRange.setMinutes(endOfRange.getMinutes() + tzOffset);
+    const endOfLastDay = new Date(endOfRange.getTime() + 86400000 - 1);
+
     const meals = await prisma.meal.findMany({
       where: {
         userId: req.userId,
-        scannedAt: {
-          gte: new Date(`${from}T00:00:00.000Z`),
-          lte: new Date(`${to}T23:59:59.999Z`),
-        },
+        scannedAt: { gte: startOfRange, lte: endOfLastDay },
       },
       include: { items: true },
       orderBy: { scannedAt: "asc" },

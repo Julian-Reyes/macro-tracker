@@ -21,4 +21,4 @@ EXPOSE 3001
 ENV NODE_ENV=production
 ENV PORT=3001
 
-CMD ["node", "server/src/index.js"]
+CMD cd server && npx prisma db push --skip-generate && cd /app && node server/src/index.js

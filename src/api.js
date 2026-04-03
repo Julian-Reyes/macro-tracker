@@ -73,11 +73,13 @@ export async function scanMeal(base64, mediaType) {
 
 export async function getMeals(date) {
   const dateStr = date || new Date().toISOString().split('T')[0];
-  return apiFetch(`/meals?date=${dateStr}`);
+  const tz = new Date().getTimezoneOffset();
+  return apiFetch(`/meals?date=${dateStr}&tz=${tz}`);
 }
 
 export async function getMealsRange(from, to) {
-  return apiFetch(`/meals/history/range?from=${from}&to=${to}`);
+  const tz = new Date().getTimezoneOffset();
+  return apiFetch(`/meals/history/range?from=${from}&to=${to}&tz=${tz}`);
 }
 
 export async function saveMeal(items, mealNotes, imageBase64, mediaType, mealType, provider) {
