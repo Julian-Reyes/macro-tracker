@@ -100,7 +100,9 @@ export default function ItemRow({
               {item.name}
             </span>
             <span style={{ color: "rgba(255,255,255,0.3)", fontSize: "12px" }}>
-              {item.portion}
+              {multiplier !== 1
+                ? item.portion.replace(/(\d+\.?\d*)/g, (m) => parseFloat((parseFloat(m) * multiplier).toFixed(1)))
+                : item.portion}
             </span>
             {isAdjusted && !expanded && (
               <span
