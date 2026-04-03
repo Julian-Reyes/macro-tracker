@@ -1,4 +1,126 @@
+import { useState } from "react";
 import { normalizeItem } from "../utils/meals";
+
+function extractBaseGrams(portion) {
+  const match = portion?.match(/(\d+\.?\d*)\s*g\b/i);
+  return match ? parseFloat(match[1]) : null;
+}
+
+function PortionControls({ multiplier, isAdjusted, portion, onMultiplierChange }) {
+  const baseGrams = extractBaseGrams(portion);
+  const [gramInput, setGramInput] = useState("");
+  const [gramFocused, setGramFocused] = useState(false);
+
+  const currentGrams = baseGrams ? parseFloat((baseGrams * multiplier).toFixed(1)) : null;
+
+  const handleGramChange = (val) => {
+    setGramInput(val);
+    const num = parseFloat(val);
+    if (!isNaN(num) && num > 0 && baseGrams) {
+      onMultiplierChange(num / baseGrams);
+    }
+  };
+
+  const btnStyle = {
+    width: "36px",
+    height: "36px",
+    borderRadius: "50%",
+    border: "1px solid rgba(255,255,255,0.12)",
+    background: "rgba(255,255,255,0.04)",
+    color: "#fff",
+    cursor: "pointer",
+    fontSize: "18px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontFamily: "'DM Sans',sans-serif",
+  };
+
+  return (
+    <div style={{ padding: "4px 20px 16px" }}>
+      {onMultiplierChange && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "20px",
+          }}
+        >
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onMultiplierChange(Math.max(0.25, multiplier - 0.25));
+            }}
+            style={btnStyle}
+          >
+            −
+          </button>
+          <span
+            style={{
+              fontSize: "18px",
+              fontWeight: 700,
+              minWidth: "50px",
+              textAlign: "center",
+              color: isAdjusted ? "#E8C872" : "rgba(255,255,255,0.5)",
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
+            {parseFloat(multiplier.toFixed(2))}×
+          </span>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onMultiplierChange(multiplier + 0.25);
+            }}
+            style={btnStyle}
+          >
+            +
+          </button>
+        </div>
+      )}
+      {onMultiplierChange && baseGrams && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "8px",
+            marginTop: "12px",
+          }}
+        >
+          <input
+            type="number"
+            inputMode="decimal"
+            value={gramFocused ? gramInput : currentGrams}
+            onFocus={() => {
+              setGramFocused(true);
+              setGramInput(String(currentGrams));
+            }}
+            onBlur={() => setGramFocused(false)}
+            onChange={(e) => handleGramChange(e.target.value)}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "72px",
+              padding: "6px 10px",
+              borderRadius: "8px",
+              border: "1px solid rgba(255,255,255,0.12)",
+              background: "rgba(255,255,255,0.04)",
+              color: isAdjusted ? "#E8C872" : "#fff",
+              fontSize: "16px",
+              fontWeight: 600,
+              textAlign: "center",
+              fontFamily: "'DM Sans',sans-serif",
+              outline: "none",
+              fontVariantNumeric: "tabular-nums",
+            }}
+          />
+          <span style={{ color: "rgba(255,255,255,0.4)", fontSize: "14px" }}>g</span>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ItemRow({
   item,
@@ -203,76 +325,12 @@ export default function ItemRow({
         </div>
       </div>
       {expanded && editable && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "20px",
-            padding: "4px 20px 16px",
-          }}
-        >
-          {onMultiplierChange && (
-            <>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onMultiplierChange(Math.max(0.25, multiplier - 0.25));
-                }}
-                style={{
-                  width: "36px",
-                  height: "36px",
-                  borderRadius: "50%",
-                  border: "1px solid rgba(255,255,255,0.12)",
-                  background: "rgba(255,255,255,0.04)",
-                  color: "#fff",
-                  cursor: "pointer",
-                  fontSize: "18px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontFamily: "'DM Sans',sans-serif",
-                }}
-              >
-                −
-              </button>
-              <span
-                style={{
-                  fontSize: "18px",
-                  fontWeight: 700,
-                  minWidth: "50px",
-                  textAlign: "center",
-                  color: isAdjusted ? "#E8C872" : "rgba(255,255,255,0.5)",
-                  fontVariantNumeric: "tabular-nums",
-                }}
-              >
-                {parseFloat(multiplier.toFixed(2))}×
-              </span>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onMultiplierChange(multiplier + 0.25);
-                }}
-                style={{
-                  width: "36px",
-                  height: "36px",
-                  borderRadius: "50%",
-                  border: "1px solid rgba(255,255,255,0.12)",
-                  background: "rgba(255,255,255,0.04)",
-                  color: "#fff",
-                  cursor: "pointer",
-                  fontSize: "18px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontFamily: "'DM Sans',sans-serif",
-                }}
-              >
-                +
-              </button>
-            </>
-          )}
-        </div>
+        <PortionControls
+          multiplier={multiplier}
+          isAdjusted={isAdjusted}
+          portion={item.portion}
+          onMultiplierChange={onMultiplierChange}
+        />
       )}
     </div>
   );
