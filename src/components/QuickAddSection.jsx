@@ -1,4 +1,5 @@
 import { normalizeItem, mealTotals } from "../utils/meals";
+import { resolveImageUrl } from "../api";
 
 function mealFingerprint(meal) {
   return (meal.items || [])
@@ -32,7 +33,7 @@ function MealCard({ meal, onRelog, onToggleFavorite, isFav }) {
     >
       {meal.imageUrl ? (
         <img
-          src={meal.imageUrl}
+          src={resolveImageUrl(meal.imageUrl)}
           alt=""
           style={{
             width: "100%",
@@ -130,7 +131,7 @@ function MealRow({ meal, onRelog, onToggleFavorite, isFav }) {
     >
       {meal.imageUrl ? (
         <img
-          src={meal.imageUrl}
+          src={resolveImageUrl(meal.imageUrl)}
           alt=""
           style={{
             width: "40px",

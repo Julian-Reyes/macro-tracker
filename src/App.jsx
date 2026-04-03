@@ -13,6 +13,7 @@ import {
   getGoals,
   downscaleImage,
   analyzeMeal,
+  resolveImageUrl,
   getGuestMeals,
   getGuestMealsByDate,
   addGuestMeal,
@@ -681,7 +682,7 @@ export default function App() {
       { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0, sugar_g: 0 },
     );
     setAnalysis({ items, totals, meal_notes: meal.mealNotes || meal.meal_notes });
-    setImage(meal.imageUrl || null);
+    setImage(resolveImageUrl(meal.imageUrl) || null);
     setScaledImageData(null);
     setMealDetailMode(false);
     setEditingMealId(null);

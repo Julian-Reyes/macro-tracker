@@ -1,4 +1,5 @@
 import MacroRing from "../components/MacroRing";
+import { resolveImageUrl } from "../api";
 import { toLocalDateStr, formatDisplayDate } from "../utils/dates";
 import {
   normalizeItem,
@@ -377,7 +378,7 @@ export default function DailyLogView({
                           totals,
                           meal_notes: entry.mealNotes || entry.meal_notes,
                         });
-                        setImage(entry.imageUrl || null);
+                        setImage(resolveImageUrl(entry.imageUrl) || null);
                         setMealDetailMode(true);
                         setEditingMealId(user ? entry.id : dailyLog.indexOf(entry));
                         setSelectedMealType(entry.mealType || entry.meal_type || "dinner");
@@ -386,7 +387,7 @@ export default function DailyLogView({
                     >
                       {entry.imageUrl ? (
                         <img
-                          src={entry.imageUrl}
+                          src={resolveImageUrl(entry.imageUrl)}
                           alt=""
                           style={{
                             width: "52px",

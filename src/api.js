@@ -1,4 +1,10 @@
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
+const UPLOADS_BASE = API_BASE.replace(/\/api$/, '');
+
+export function resolveImageUrl(url) {
+  if (!url || url.startsWith('data:') || url.startsWith('http')) return url;
+  return `${UPLOADS_BASE}${url}`;
+}
 
 // --- Token management ---
 export function getToken() {
