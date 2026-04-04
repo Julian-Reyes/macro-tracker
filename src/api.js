@@ -145,11 +145,11 @@ export async function importMeals(meals) {
 }
 
 // --- Meals (guest, no auth) ---
-export async function analyzeMeal(base64, mediaType, description) {
+export async function analyzeMeal(base64, mediaType, description, lang) {
   const res = await fetch(`${API_BASE}/meals/analyze`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image: base64, mediaType, description: description || undefined }),
+    body: JSON.stringify({ image: base64, mediaType, description: description || undefined, lang: lang || undefined }),
   });
   const data = await res.json();
   if (!res.ok) throw { status: res.status, message: data.error || 'Analysis failed' };

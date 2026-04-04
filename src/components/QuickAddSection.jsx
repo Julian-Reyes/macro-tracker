@@ -223,6 +223,7 @@ export default function QuickAddSection({
   recentMeals,
   onRelogMeal,
   onToggleFavorite,
+  t,
 }) {
   if (!favoriteMeals.length && !recentMeals.length) return null;
 
@@ -236,7 +237,7 @@ export default function QuickAddSection({
     <div style={{ width: "100%", marginTop: "-8px" }}>
       {favoriteMeals.length > 0 && (
         <div>
-          <div style={sectionHeaderStyle}>Favorites</div>
+          <div style={sectionHeaderStyle}>{t("quickAdd.favorites")}</div>
           <div
             style={{
               display: "flex",
@@ -262,7 +263,7 @@ export default function QuickAddSection({
 
       {filteredRecents.length > 0 && (
         <div style={{ marginTop: favoriteMeals.length > 0 ? "12px" : 0 }}>
-          <div style={sectionHeaderStyle}>Recent</div>
+          <div style={sectionHeaderStyle}>{t("quickAdd.recent")}</div>
           {filteredRecents.map((meal, i) => (
             <MealRow
               key={meal.id || meal.localId || i}

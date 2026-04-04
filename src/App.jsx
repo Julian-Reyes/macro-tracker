@@ -32,6 +32,7 @@ import {
 } from "./api";
 import { toLocalDateStr, inferMealType, getWeekStartMonday, getWeekDays } from "./utils/dates";
 import { normalizeItem, computeDailyTotals } from "./utils/meals";
+import { useLocale } from "./locales/index.jsx";
 import BottomTabBar from "./components/BottomTabBar";
 import CaptureView from "./views/CaptureView";
 import ManualEntryView from "./views/ManualEntryView";
@@ -40,6 +41,7 @@ import DailyLogView from "./views/DailyLogView";
 import BarcodeScannerView from "./views/BarcodeScannerView";
 
 export default function App() {
+  const { t, lang } = useLocale();
   const [user, setUser] = useState(null);
   const [authChecking, setAuthChecking] = useState(true);
   const [showAuth, setShowAuth] = useState(false);
@@ -420,7 +422,7 @@ export default function App() {
       setScaledImageData(scaled);
 
       // Analyze only — save happens in addToDaily after user can edit portions
-      const result = await analyzeMeal(scaled.base64, scaled.mediaType, mealDescription.trim() || undefined);
+      const result = await analyzeMeal(scaled.base64, scaled.mediaType, mealDescription.trim() || undefined, lang);
       setAnalysis({
         items: result.analysis.items,
         totals: result.analysis.totals,
@@ -467,6 +469,7 @@ export default function App() {
     setAnalysis(null);
     setError(null);
     setScaledImageData(null);
+    setMealDescription("");
     setMealDetailMode(false);
     setExtraItems([]);
     setExtraItemAdjustments([]);
@@ -969,7 +972,7 @@ export default function App() {
               minHeight: "36px",
             }}
           >
-            Log out
+            {t("app.logout")}
           </button>
         ) : (
           <button
@@ -987,7 +990,7 @@ export default function App() {
               minHeight: "36px",
             }}
           >
-            Login
+            {t("app.login")}
           </button>
         )}
       </div>
@@ -1026,7 +1029,7 @@ export default function App() {
               animation: "pulse 2s infinite",
             }}
           >
-            Looking up product...
+            {t("app.lookingUp")}
           </p>
         </div>
       )}

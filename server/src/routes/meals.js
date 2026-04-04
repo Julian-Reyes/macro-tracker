@@ -60,7 +60,8 @@ mealsRouter.post("/analyze", analyzeLimiter, upload.single("image"), async (req,
 
     const provider = req.body.provider || undefined;
     const description = req.body.description || undefined;
-    const { data: analysis, provider: usedProvider } = await analyzeFood(base64, mediaType, provider, description);
+    const lang = req.body.lang || undefined;
+    const { data: analysis, provider: usedProvider } = await analyzeFood(base64, mediaType, provider, description, lang);
 
     res.json({ analysis, provider: usedProvider });
   } catch (err) {

@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { login, register, getGuestMeals, importMeals, clearGuestMeals, getGuestGoals, saveProfile, clearGuestGoals } from "./api";
+import { useLocale } from "./locales/index.jsx";
 
 export default function AuthScreen({ onAuth }) {
+  const { t } = useLocale();
   const [mode, setMode] = useState("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -43,7 +45,7 @@ export default function AuthScreen({ onAuth }) {
 
       onAuth(user);
     } catch (err) {
-      setError(err.message || "Something went wrong");
+      setError(err.message || t("auth.genericError"));
     } finally {
       setLoading(false);
     }
@@ -83,7 +85,7 @@ export default function AuthScreen({ onAuth }) {
             Macro<span style={{ color: "#E8C872" }}>.</span>
           </h1>
           <p style={{ color: "rgba(255,255,255,0.3)", fontSize: "13px", marginTop: "8px" }}>
-            AI-powered nutrition tracking
+            {t("app.tagline")}
           </p>
         </div>
 
@@ -92,7 +94,7 @@ export default function AuthScreen({ onAuth }) {
           {mode === "register" && (
             <input
               type="text"
-              placeholder="Name (optional)"
+              placeholder={t("auth.namePlaceholder")}
               value={name}
               onChange={(e) => setName(e.target.value)}
               style={inputStyle}
@@ -100,7 +102,7 @@ export default function AuthScreen({ onAuth }) {
           )}
           <input
             type="text"
-            placeholder="Username"
+            placeholder={t("auth.usernamePlaceholder")}
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             required
@@ -108,7 +110,7 @@ export default function AuthScreen({ onAuth }) {
           />
           <input
             type="password"
-            placeholder="Password"
+            placeholder={t("auth.passwordPlaceholder")}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -133,13 +135,13 @@ export default function AuthScreen({ onAuth }) {
               marginTop: "4px",
             }}
           >
-            {loading ? "Please wait..." : mode === "login" ? "Log In" : "Create Account"}
+            {loading ? t("auth.pleaseWait") : mode === "login" ? t("auth.logIn") : t("auth.createAccount")}
           </button>
         </form>
 
         {/* Toggle */}
         <p style={{ textAlign: "center", marginTop: "24px", fontSize: "13px", color: "rgba(255,255,255,0.35)" }}>
-          {mode === "login" ? "Don't have an account? " : "Already have an account? "}
+          {mode === "login" ? `${t("auth.noAccount")} ` : `${t("auth.hasAccount")} `}
           <button
             onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(null); }}
             style={{
@@ -148,7 +150,7 @@ export default function AuthScreen({ onAuth }) {
               textDecoration: "underline", padding: 0,
             }}
           >
-            {mode === "login" ? "Register" : "Log in"}
+            {mode === "login" ? t("auth.register") : t("auth.loginLink")}
           </button>
         </p>
       </div>

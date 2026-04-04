@@ -1,18 +1,19 @@
 import { useState, useEffect, useMemo } from "react";
 import { getProfile, saveProfile, getGuestGoals, saveGuestGoals } from "./api";
+import { useLocale } from "./locales/index.jsx";
 
 const ACTIVITY_LEVELS = [
-  { value: "sedentary", label: "Sedentary", desc: "Little or no exercise" },
-  { value: "light", label: "Light", desc: "Exercise 1-3 days/week" },
-  { value: "moderate", label: "Moderate", desc: "Exercise 3-5 days/week" },
-  { value: "active", label: "Active", desc: "Exercise 6-7 days/week" },
-  { value: "very_active", label: "Very Active", desc: "Physical job or 2x/day" },
+  { value: "sedentary", labelKey: "goals.activity.sedentary", descKey: "goals.activity.sedentaryDesc" },
+  { value: "light", labelKey: "goals.activity.light", descKey: "goals.activity.lightDesc" },
+  { value: "moderate", labelKey: "goals.activity.moderate", descKey: "goals.activity.moderateDesc" },
+  { value: "active", labelKey: "goals.activity.active", descKey: "goals.activity.activeDesc" },
+  { value: "very_active", labelKey: "goals.activity.veryActive", descKey: "goals.activity.veryActiveDesc" },
 ];
 
 const GOAL_TYPES = [
-  { value: "lose_weight", label: "Lose Weight", desc: "~1 lb/week deficit" },
-  { value: "maintain", label: "Maintain", desc: "Keep current weight" },
-  { value: "gain_muscle", label: "Gain Muscle", desc: "Lean bulk surplus" },
+  { value: "lose_weight", labelKey: "goals.goalType.lose", descKey: "goals.goalType.loseDesc" },
+  { value: "maintain", labelKey: "goals.goalType.maintain", descKey: "goals.goalType.maintainDesc" },
+  { value: "gain_muscle", labelKey: "goals.goalType.gain", descKey: "goals.goalType.gainDesc" },
 ];
 
 const ACTIVITY_MULTIPLIERS = {
@@ -50,6 +51,7 @@ const kgToLbs = (kg) => Math.round(kg * 2.205);
 const lbsToKg = (lbs) => +(lbs / 2.205).toFixed(1);
 
 export default function GoalsScreen({ goals, onSave, isGuest }) {
+  const { t, lang, setLang } = useLocale();
   const [sex, setSex] = useState("");
   const [age, setAge] = useState("");
   const [heightCm, setHeightCm] = useState("");
@@ -157,7 +159,7 @@ export default function GoalsScreen({ goals, onSave, isGuest }) {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err) {
-      setError(err.message || "Failed to save");
+      setError(err.message || t("goals.failedSave"));
     } finally {
       setSaving(false);
     }
@@ -166,7 +168,7 @@ export default function GoalsScreen({ goals, onSave, isGuest }) {
   if (loading) {
     return (
       <div style={{ padding: "60px 20px", textAlign: "center" }}>
-        <div style={{ color: "rgba(255,255,255,0.4)", fontSize: "14px" }}>Loading profile...</div>
+        <div style={{ color: "rgba(255,255,255,0.4)", fontSize: "14px" }}>{t("goals.loading")}</div>
       </div>
     );
   }
@@ -201,24 +203,45 @@ export default function GoalsScreen({ goals, onSave, isGuest }) {
         <h2 style={{
           fontFamily: "'Instrument Serif',serif", fontSize: "28px",
           color: "#fff", margin: 0, fontWeight: 400,
-        }}>Your Goals</h2>
+        }}>{t("goals.title")}</h2>
+      </div>
+
+      {/* Language toggle */}
+      <div style={sectionStyle}>
+        <label style={labelStyle}>{t("goals.language")}</label>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button type="button" onClick={() => setLang("en")} style={{
+            flex: 1, padding: "10px", borderRadius: "8px", cursor: "pointer",
+            fontFamily: "'DM Sans',sans-serif", fontSize: "14px", fontWeight: 600,
+            border: lang === "en" ? "1px solid #E8C872" : "1px solid rgba(255,255,255,0.1)",
+            background: lang === "en" ? "rgba(232,200,114,0.1)" : "rgba(255,255,255,0.04)",
+            color: lang === "en" ? "#E8C872" : "rgba(255,255,255,0.5)",
+          }}>English</button>
+          <button type="button" onClick={() => setLang("pt")} style={{
+            flex: 1, padding: "10px", borderRadius: "8px", cursor: "pointer",
+            fontFamily: "'DM Sans',sans-serif", fontSize: "14px", fontWeight: 600,
+            border: lang === "pt" ? "1px solid #E8C872" : "1px solid rgba(255,255,255,0.1)",
+            background: lang === "pt" ? "rgba(232,200,114,0.1)" : "rgba(255,255,255,0.04)",
+            color: lang === "pt" ? "#E8C872" : "rgba(255,255,255,0.5)",
+          }}>Português</button>
+        </div>
       </div>
 
       {/* Sex */}
       <div style={sectionStyle}>
-        <label style={labelStyle}>Sex</label>
+        <label style={labelStyle}>{t("goals.sex")}</label>
         <div style={{ display: "flex", gap: "10px" }}>
-          {["male", "female"].map(s => (
-            <button key={s} onClick={() => setSex(s)} style={{
-              ...pillStyle(sex === s), flex: 1, textTransform: "capitalize",
-            }}>{s}</button>
+          {[{ value: "male", label: t("goals.male") }, { value: "female", label: t("goals.female") }].map(s => (
+            <button key={s.value} onClick={() => setSex(s.value)} style={{
+              ...pillStyle(sex === s.value), flex: 1,
+            }}>{s.label}</button>
           ))}
         </div>
       </div>
 
       {/* Age */}
       <div style={sectionStyle}>
-        <label style={labelStyle}>Age</label>
+        <label style={labelStyle}>{t("goals.age")}</label>
         <input
           type="number" inputMode="numeric" placeholder="25"
           value={age} onChange={e => setAge(e.target.value)}
@@ -232,13 +255,13 @@ export default function GoalsScreen({ goals, onSave, isGuest }) {
           background: "none", border: "1px solid rgba(255,255,255,0.1)",
           borderRadius: "8px", padding: "4px 12px", cursor: "pointer",
           fontSize: "12px", color: "rgba(255,255,255,0.5)", fontFamily: "'DM Sans',sans-serif",
-        }}>{useImperial ? "Switch to metric" : "Switch to imperial"}</button>
+        }}>{useImperial ? t("goals.switchMetric") : t("goals.switchImperial")}</button>
       </div>
 
       <div style={{ display: "flex", gap: "12px", ...sectionStyle }}>
         {/* Height */}
         <div style={{ flex: 1 }}>
-          <label style={labelStyle}>Height {useImperial ? "(ft/in)" : "(cm)"}</label>
+          <label style={labelStyle}>{useImperial ? t("goals.heightFtIn") : t("goals.heightCm")}</label>
           {useImperial ? (
             <div style={{ display: "flex", gap: "8px" }}>
               <input
@@ -263,7 +286,7 @@ export default function GoalsScreen({ goals, onSave, isGuest }) {
 
         {/* Weight */}
         <div style={{ flex: 1 }}>
-          <label style={labelStyle}>Weight {useImperial ? "(lbs)" : "(kg)"}</label>
+          <label style={labelStyle}>{useImperial ? t("goals.weightLbs") : t("goals.weightKg")}</label>
           {useImperial ? (
             <input
               type="number" inputMode="numeric" placeholder="175"
@@ -282,7 +305,7 @@ export default function GoalsScreen({ goals, onSave, isGuest }) {
 
       {/* Activity Level */}
       <div style={sectionStyle}>
-        <label style={labelStyle}>Activity Level</label>
+        <label style={labelStyle}>{t("goals.activityLevel")}</label>
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
           {ACTIVITY_LEVELS.map(a => (
             <button key={a.value} onClick={() => setActivityLevel(a.value)} style={{
@@ -290,8 +313,8 @@ export default function GoalsScreen({ goals, onSave, isGuest }) {
               display: "flex", justifyContent: "space-between", alignItems: "center",
               textAlign: "left",
             }}>
-              <span>{a.label}</span>
-              <span style={{ fontSize: "11px", opacity: 0.6, fontWeight: 400 }}>{a.desc}</span>
+              <span>{t(a.labelKey)}</span>
+              <span style={{ fontSize: "11px", opacity: 0.6, fontWeight: 400 }}>{t(a.descKey)}</span>
             </button>
           ))}
         </div>
@@ -299,7 +322,7 @@ export default function GoalsScreen({ goals, onSave, isGuest }) {
 
       {/* Goal Type */}
       <div style={sectionStyle}>
-        <label style={labelStyle}>Goal</label>
+        <label style={labelStyle}>{t("goals.goal")}</label>
         <div style={{ display: "flex", gap: "10px" }}>
           {GOAL_TYPES.map(g => (
             <button key={g.value} onClick={() => setGoalType(g.value)} style={{
@@ -307,8 +330,8 @@ export default function GoalsScreen({ goals, onSave, isGuest }) {
               flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "4px",
               padding: "14px 8px",
             }}>
-              <span style={{ fontSize: "13px" }}>{g.label}</span>
-              <span style={{ fontSize: "10px", opacity: 0.6, fontWeight: 400 }}>{g.desc}</span>
+              <span style={{ fontSize: "13px" }}>{t(g.labelKey)}</span>
+              <span style={{ fontSize: "10px", opacity: 0.6, fontWeight: 400 }}>{t(g.descKey)}</span>
             </button>
           ))}
         </div>
@@ -323,15 +346,15 @@ export default function GoalsScreen({ goals, onSave, isGuest }) {
         }}>
           <div style={{ fontSize: "12px", fontWeight: 600, color: "rgba(255,255,255,0.5)",
             textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "16px" }}>
-            Your Daily Targets
+            {t("goals.dailyTargets")}
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
             {[
-              { label: "Calories", value: preview.calories, unit: "kcal", color: "#E8C872" },
-              { label: "Protein", value: preview.proteinG, unit: "g", color: "#7BE0AD" },
-              { label: "Carbs", value: preview.carbsG, unit: "g", color: "#72B4E8" },
-              { label: "Fat", value: preview.fatG, unit: "g", color: "#E87272" },
+              { label: t("macro.calories"), value: preview.calories, unit: t("macro.kcal"), color: "#E8C872" },
+              { label: t("macro.protein"), value: preview.proteinG, unit: t("macro.g"), color: "#7BE0AD" },
+              { label: t("macro.carbs"), value: preview.carbsG, unit: t("macro.g"), color: "#72B4E8" },
+              { label: t("macro.fat"), value: preview.fatG, unit: t("macro.g"), color: "#E87272" },
             ].map(m => (
               <div key={m.label} style={{
                 background: "rgba(255,255,255,0.03)", borderRadius: "12px",
@@ -349,7 +372,7 @@ export default function GoalsScreen({ goals, onSave, isGuest }) {
           <div style={{
             marginTop: "14px", fontSize: "11px", color: "rgba(255,255,255,0.3)", textAlign: "center",
           }}>
-            BMR: {preview.bmr} kcal &middot; TDEE: {preview.tdee} kcal
+            {t("goals.bmr")} {preview.bmr} {t("macro.kcal")} &middot; {t("goals.tdee")} {preview.tdee} {t("macro.kcal")}
           </div>
         </div>
       )}
@@ -375,7 +398,7 @@ export default function GoalsScreen({ goals, onSave, isGuest }) {
           transition: "all 0.2s",
         }}
       >
-        {saving ? "Saving..." : saved ? "Saved!" : "Save Goals"}
+        {saving ? t("goals.saving") : saved ? t("goals.saved") : t("goals.save")}
       </button>
 
       <div style={{ height: "80px" }} />

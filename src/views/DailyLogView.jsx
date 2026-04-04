@@ -6,8 +6,8 @@ import {
   mealTotals,
   groupMealsByType,
   computeDailyTotals,
-  MEAL_TYPE_LABELS,
-} from "../utils/meals";
+} from "../utils/meals.js";
+import { useLocale } from "../locales/index.jsx";
 
 export default function DailyLogView({
   selectedDate,
@@ -32,6 +32,7 @@ export default function DailyLogView({
   resetCapture,
   onToggleFavorite,
 }) {
+  const { t, lang } = useLocale();
   return (
     <div style={{ animation: "fadeSlideIn 0.3s ease-out" }}>
       {/* Date Navigation */}
@@ -72,7 +73,7 @@ export default function DailyLogView({
             color: isToday ? "#E8C872" : "rgba(255,255,255,0.7)",
           }}
         >
-          {isToday ? "Today" : formatDisplayDate(selectedDate)}
+          {isToday ? t("daily.today") : formatDisplayDate(selectedDate, lang)}
         </span>
         <button
           onClick={() => changeDate(1)}
@@ -111,7 +112,7 @@ export default function DailyLogView({
               fontFamily: "'DM Sans',sans-serif",
             }}
           >
-            Today
+            {t("daily.today")}
           </button>
         )}
       </div>
@@ -128,28 +129,28 @@ export default function DailyLogView({
             value={dailyTotals.calories}
             max={goals.calories}
             color="#E8C872"
-            label="Calories"
+            label={t("macro.calories")}
             unit="kcal"
           />
           <MacroRing
             value={dailyTotals.protein_g}
             max={goals.proteinG}
             color="#7BE0AD"
-            label="Protein"
+            label={t("macro.protein")}
             unit="g"
           />
           <MacroRing
             value={dailyTotals.carbs_g}
             max={goals.carbsG}
             color="#72B4E8"
-            label="Carbs"
+            label={t("macro.carbs")}
             unit="g"
           />
           <MacroRing
             value={dailyTotals.fat_g}
             max={goals.fatG}
             color="#E87272"
-            label="Fat"
+            label={t("macro.fat")}
             unit="g"
           />
         </div>
@@ -167,28 +168,28 @@ export default function DailyLogView({
         >
           {[
             {
-              label: "Calories",
+              label: t("macro.calories"),
               remaining: goals.calories - dailyTotals.calories,
               goal: goals.calories,
               color: "#E8C872",
               unit: "",
             },
             {
-              label: "Protein",
+              label: t("macro.protein"),
               remaining: Math.round(goals.proteinG - dailyTotals.protein_g),
               goal: goals.proteinG,
               color: "#7BE0AD",
               unit: "g",
             },
             {
-              label: "Carbs",
+              label: t("macro.carbs"),
               remaining: Math.round(goals.carbsG - dailyTotals.carbs_g),
               goal: goals.carbsG,
               color: "#72B4E8",
               unit: "g",
             },
             {
-              label: "Fat",
+              label: t("macro.fat"),
               remaining: Math.round(goals.fatG - dailyTotals.fat_g),
               goal: goals.fatG,
               color: "#E87272",
@@ -211,7 +212,7 @@ export default function DailyLogView({
                   }}
                 >
                   {atGoal
-                    ? "On target"
+                    ? t("daily.onTarget")
                     : `${Math.abs(Math.round(remaining))}${unit}`}
                 </div>
                 <div
@@ -238,7 +239,7 @@ export default function DailyLogView({
                         : "rgba(255,255,255,0.3)",
                     }}
                   >
-                    {over ? "Over" : "Remaining"}
+                    {over ? t("daily.over") : t("daily.remaining")}
                   </div>
                 )}
               </div>
@@ -268,7 +269,7 @@ export default function DailyLogView({
               margin: 0,
             }}
           >
-            Create an account to save your data across devices
+            {t("daily.signupBanner")}
           </p>
           <button
             onClick={() => setShowAuth(true)}
@@ -286,7 +287,7 @@ export default function DailyLogView({
               marginLeft: "12px",
             }}
           >
-            Sign up
+            {t("daily.signUp")}
           </button>
         </div>
       )}
@@ -295,8 +296,8 @@ export default function DailyLogView({
         <div style={{ padding: "60px 20px", textAlign: "center" }}>
           <p style={{ color: "rgba(255,255,255,0.2)", fontSize: "14px" }}>
             {isToday
-              ? "No meals logged yet today"
-              : `No meals on ${formatDisplayDate(selectedDate)}`}
+              ? t("daily.noMealsToday")
+              : `${t("daily.noMealsOn")} ${formatDisplayDate(selectedDate, lang)}`}
           </p>
           <button
             onClick={() => setView("capture")}
@@ -312,7 +313,7 @@ export default function DailyLogView({
               fontFamily: "'DM Sans',sans-serif",
             }}
           >
-            Scan your first meal
+            {t("daily.scanFirst")}
           </button>
         </div>
       ) : (
@@ -338,7 +339,7 @@ export default function DailyLogView({
                       fontWeight: 500,
                     }}
                   >
-                    {MEAL_TYPE_LABELS[type]}
+                    {t("mealType." + type)}
                   </span>
                   <span
                     style={{
@@ -347,7 +348,7 @@ export default function DailyLogView({
                       fontVariantNumeric: "tabular-nums",
                     }}
                   >
-                    {groupTotals.calories} cal
+                    {groupTotals.calories} {t("macro.cal")}
                   </span>
                 </div>
                 {groupMeals.map((entry, i) => {
@@ -437,7 +438,7 @@ export default function DailyLogView({
                           }}
                         >
                           <span style={{ color: "#E8C872" }}>
-                            {totals.calories} cal
+                            {totals.calories} {t("macro.cal")}
                           </span>
                           <span>P {Math.round(totals.protein_g)}g</span>
                           <span>C {Math.round(totals.carbs_g)}g</span>
@@ -535,7 +536,7 @@ export default function DailyLogView({
             boxShadow: "0 4px 24px rgba(232,200,114,0.2)",
           }}
         >
-          + Scan Meal
+          {t("daily.addMeal")}
         </button>
       </div>
     </div>

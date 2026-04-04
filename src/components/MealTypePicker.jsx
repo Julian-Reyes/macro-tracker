@@ -1,6 +1,8 @@
-import { MEAL_TYPE_ORDER, MEAL_TYPE_LABELS } from "../utils/meals";
+import { MEAL_TYPE_ORDER } from "../utils/meals";
+import { useLocale } from "../locales/index.jsx";
 
 export default function MealTypePicker({ value, onChange }) {
+  const { t } = useLocale();
   return (
     <div
       style={{
@@ -30,7 +32,7 @@ export default function MealTypePicker({ value, onChange }) {
             transition: "all 0.2s",
           }}
         >
-          {MEAL_TYPE_LABELS[type]}
+          {t("mealType." + type)}
         </button>
       ))}
     </div>

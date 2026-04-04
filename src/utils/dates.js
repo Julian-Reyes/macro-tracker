@@ -5,10 +5,10 @@ export function toLocalDateStr(date = new Date()) {
   return `${y}-${m}-${d}`;
 }
 
-export function formatDisplayDate(dateStr) {
+export function formatDisplayDate(dateStr, lang = "en") {
   const [y, m, d] = dateStr.split("-").map(Number);
   const date = new Date(y, m - 1, d);
-  return date.toLocaleDateString("en-US", {
+  return date.toLocaleDateString(lang === "pt" ? "pt-BR" : "en-US", {
     weekday: "short",
     month: "short",
     day: "numeric",

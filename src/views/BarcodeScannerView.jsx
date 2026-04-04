@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
+import { useLocale } from "../locales/index.jsx";
 
 export default function BarcodeScannerView({ onBarcodeDetected, onClose }) {
+  const { t } = useLocale();
   const html5QrCodeRef = useRef(null);
   const fileInputRef = useRef(null);
   const [mode, setMode] = useState("loading"); // loading | live | photo
@@ -75,7 +77,7 @@ export default function BarcodeScannerView({ onBarcodeDetected, onClose }) {
         scanner.clear();
         onBarcodeDetected(result);
       } catch {
-        setPhotoError("No barcode found — try holding the camera closer");
+        setPhotoError(t("barcode.noBarcode"));
         if (fileInputRef.current) fileInputRef.current.value = "";
       } finally {
         setProcessing(false);
@@ -221,7 +223,7 @@ export default function BarcodeScannerView({ onBarcodeDetected, onClose }) {
             }}
           />
           <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "13px" }}>
-            Starting scanner...
+            {t("barcode.starting")}
           </p>
         </div>
       )}
@@ -236,7 +238,7 @@ export default function BarcodeScannerView({ onBarcodeDetected, onClose }) {
               fontFamily: "'DM Sans',sans-serif",
             }}
           >
-            Point camera at the barcode on the package
+            {t("barcode.pointCamera")}
           </p>
         </div>
       )}
@@ -260,7 +262,7 @@ export default function BarcodeScannerView({ onBarcodeDetected, onClose }) {
                 margin: 0,
               }}
             >
-              Scan Barcode
+              {t("barcode.title")}
             </h3>
             <button
               onClick={onClose}
@@ -290,7 +292,7 @@ export default function BarcodeScannerView({ onBarcodeDetected, onClose }) {
               lineHeight: 1.5,
             }}
           >
-            Take a clear photo of the barcode — hold steady and fill the frame
+            {t("barcode.photoTip")}
           </p>
 
           <button
@@ -312,7 +314,7 @@ export default function BarcodeScannerView({ onBarcodeDetected, onClose }) {
               marginBottom: "12px",
             }}
           >
-            {processing ? "Reading barcode..." : "📷 Scan Barcode"}
+            {processing ? t("barcode.reading") : `📷 ${t("barcode.scanButton")}`}
           </button>
           <input
             ref={fileInputRef}
@@ -379,7 +381,7 @@ export default function BarcodeScannerView({ onBarcodeDetected, onClose }) {
                 letterSpacing: "1px",
               }}
             >
-              or type it
+              {t("barcode.orType")}
             </span>
             <div
               style={{
@@ -396,7 +398,7 @@ export default function BarcodeScannerView({ onBarcodeDetected, onClose }) {
               pattern="[0-9]*"
               value={manualCode}
               onChange={(e) => setManualCode(e.target.value.replace(/\D/g, ""))}
-              placeholder="Barcode number"
+              placeholder={t("barcode.placeholder")}
               onKeyDown={(e) => e.key === "Enter" && handleManualSubmit()}
               style={{
                 flex: 1,
@@ -428,7 +430,7 @@ export default function BarcodeScannerView({ onBarcodeDetected, onClose }) {
                 fontFamily: "'DM Sans',sans-serif",
               }}
             >
-              Go
+              {t("barcode.go")}
             </button>
           </div>
         </div>

@@ -2,6 +2,7 @@ import MacroRing from "../components/MacroRing";
 import ItemRow from "../components/ItemRow";
 import MealTypePicker from "../components/MealTypePicker";
 import QuickAddSection from "../components/QuickAddSection";
+import { useLocale } from "../locales/index.jsx";
 
 export default function CaptureView({
   view,
@@ -64,6 +65,8 @@ export default function CaptureView({
   onRelogMeal,
   onToggleFavorite,
 }) {
+  const { t } = useLocale();
+
   return (
     <div style={{ animation: "fadeSlideIn 0.3s ease-out" }}>
       {view === "capture" && !image ? (
@@ -99,10 +102,10 @@ export default function CaptureView({
                 lineHeight: 1.5,
               }}
             >
-              Snap a photo of your meal
+              {t("capture.snapPhoto")}
               <br />
               <span style={{ fontSize: "12px", opacity: 0.6 }}>
-                AI will estimate your macros instantly
+                {t("capture.aiEstimate")}
               </span>
             </p>
           </div>
@@ -123,7 +126,7 @@ export default function CaptureView({
                 fontFamily: "'DM Sans',sans-serif",
               }}
             >
-              🖼️ Gallery
+              🖼️ {t("capture.gallery")}
             </button>
             <button
               onClick={() => cameraInputRef.current?.click()}
@@ -141,7 +144,7 @@ export default function CaptureView({
                 letterSpacing: "0.3px",
               }}
             >
-              📷 Camera
+              📷 {t("capture.camera")}
             </button>
             <button
               onClick={onBarcodeScan}
@@ -158,7 +161,7 @@ export default function CaptureView({
                 fontFamily: "'DM Sans',sans-serif",
               }}
             >
-              Barcode
+              {t("capture.barcode")}
             </button>
           </div>
 
@@ -183,6 +186,7 @@ export default function CaptureView({
             recentMeals={recentMeals || []}
             onRelogMeal={onRelogMeal}
             onToggleFavorite={onToggleFavorite}
+            t={t}
           />
 
           <button
@@ -198,7 +202,7 @@ export default function CaptureView({
               minHeight: "44px",
             }}
           >
-            or type it in
+            {t("capture.orTypeIt")}
           </button>
         </div>
       ) : (
@@ -257,7 +261,7 @@ export default function CaptureView({
                 type="text"
                 value={mealDescription}
                 onChange={(e) => setMealDescription(e.target.value)}
-                placeholder="Describe your meal (optional)"
+                placeholder={t("capture.describeMeal")}
                 style={{
                   width: "100%",
                   padding: "12px 16px",
@@ -299,7 +303,7 @@ export default function CaptureView({
                   fontFamily: "'DM Sans',sans-serif",
                 }}
               >
-                Retake
+                {t("capture.retake")}
               </button>
               <button
                 onClick={analyzeFood}
@@ -316,7 +320,7 @@ export default function CaptureView({
                   fontFamily: "'DM Sans',sans-serif",
                 }}
               >
-                Analyze Meal →
+                {t("capture.analyze")} →
               </button>
             </div>
           )}
@@ -342,7 +346,7 @@ export default function CaptureView({
                   animation: "pulse 2s infinite",
                 }}
               >
-                Analyzing your meal...
+                {t("capture.analyzing")}
               </p>
             </div>
           )}
@@ -373,7 +377,7 @@ export default function CaptureView({
                   fontFamily: "'DM Sans',sans-serif",
                 }}
               >
-                Try Again
+                {t("capture.tryAgain")}
               </button>
             </div>
           )}
@@ -437,7 +441,7 @@ export default function CaptureView({
                       color: "rgba(255,255,255,0.35)",
                     }}
                   >
-                    Fiber:{" "}
+                    {t("capture.fiber")}{" "}
                     <span style={{ color: "rgba(255,255,255,0.6)" }}>
                       {adjustedTotals.fiber_g}g
                     </span>
@@ -450,7 +454,7 @@ export default function CaptureView({
                       color: "rgba(255,255,255,0.35)",
                     }}
                   >
-                    Sugar:{" "}
+                    {t("capture.sugar")}{" "}
                     <span style={{ color: "rgba(255,255,255,0.6)" }}>
                       {adjustedTotals.sugar_g}g
                     </span>
@@ -477,7 +481,7 @@ export default function CaptureView({
                       fontWeight: 500,
                     }}
                   >
-                    Breakdown
+                    {t("capture.breakdown")}
                   </span>
                   {(!mealDetailMode || isEditing) && (
                     <span
@@ -486,7 +490,7 @@ export default function CaptureView({
                         color: "rgba(255,255,255,0.15)",
                       }}
                     >
-                      tap to adjust
+                      {t("capture.tapAdjust")}
                     </span>
                   )}
                 </div>
@@ -562,7 +566,7 @@ export default function CaptureView({
                           fontFamily: "'DM Sans',sans-serif",
                         }}
                       >
-                        + Add Item
+                        {t("capture.addItem")}
                       </button>
                     ) : (
                       <div>
@@ -579,7 +583,7 @@ export default function CaptureView({
                             onChange={(e) =>
                               handleManualSearch(e.target.value)
                             }
-                            placeholder="Search foods..."
+                            placeholder={t("capture.searchFoods")}
                             autoFocus
                             style={{
                               flex: 1,
@@ -797,7 +801,7 @@ export default function CaptureView({
                                   color: "rgba(255,255,255,0.4)",
                                 }}
                               >
-                                Amount:
+                                {t("capture.amount")}
                               </label>
                               <input
                                 type="number"
@@ -831,7 +835,7 @@ export default function CaptureView({
                                   color: "rgba(255,255,255,0.4)",
                                 }}
                               >
-                                grams
+                                {t("capture.grams")}
                               </span>
                             </div>
                             <div
@@ -975,7 +979,7 @@ export default function CaptureView({
                         fontFamily: "'DM Sans',sans-serif",
                       }}
                     >
-                      ← Back to Log
+                      ← {t("capture.backToLog")}
                     </button>
                     <button
                       onClick={onStartEdit}
@@ -993,7 +997,7 @@ export default function CaptureView({
                         fontFamily: "'DM Sans',sans-serif",
                       }}
                     >
-                      Edit Meal
+                      {t("capture.editMeal")}
                     </button>
                   </>
                 ) : mealDetailMode && isEditing ? (
@@ -1012,7 +1016,7 @@ export default function CaptureView({
                         fontFamily: "'DM Sans',sans-serif",
                       }}
                     >
-                      Cancel
+                      {t("capture.cancel")}
                     </button>
                     <button
                       onClick={onSaveEdit}
@@ -1030,7 +1034,7 @@ export default function CaptureView({
                         fontFamily: "'DM Sans',sans-serif",
                       }}
                     >
-                      Save Changes
+                      {t("capture.saveChanges")}
                     </button>
                   </>
                 ) : (
@@ -1049,7 +1053,7 @@ export default function CaptureView({
                         fontFamily: "'DM Sans',sans-serif",
                       }}
                     >
-                      New Scan
+                      {t("capture.newScan")}
                     </button>
                     <button
                       onClick={addToDaily}
@@ -1067,7 +1071,7 @@ export default function CaptureView({
                         fontFamily: "'DM Sans',sans-serif",
                       }}
                     >
-                      + Add to Log
+                      {t("capture.addToLog")}
                     </button>
                   </>
                 )}

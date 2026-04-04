@@ -1,6 +1,7 @@
 import MacroRing from "../components/MacroRing";
 import ItemRow from "../components/ItemRow";
 import MealTypePicker from "../components/MealTypePicker";
+import { useLocale } from "../locales/index.jsx";
 
 export default function ManualEntryView({
   manualQuery,
@@ -27,6 +28,7 @@ export default function ManualEntryView({
   addManualToDaily,
   resetCapture,
 }) {
+  const { t } = useLocale();
   return (
     <div style={{ animation: "fadeSlideIn 0.3s ease-out" }}>
       <div style={{ padding: "20px" }}>
@@ -36,7 +38,7 @@ export default function ManualEntryView({
             type="text"
             value={manualQuery}
             onChange={(e) => handleManualSearch(e.target.value)}
-            placeholder="Search foods (e.g. chicken breast)"
+            placeholder={t("manual.searchPlaceholder")}
             style={{
               flex: 1,
               padding: "12px 16px",
@@ -94,7 +96,7 @@ export default function ManualEntryView({
                 fontWeight: 500,
               }}
             >
-              Results
+              {t("manual.results")}
             </span>
             {manualResults.map((food, i) => (
               <div
@@ -240,7 +242,7 @@ export default function ManualEntryView({
               <label
                 style={{ fontSize: "12px", color: "rgba(255,255,255,0.4)" }}
               >
-                Amount:
+                {t("capture.amount")}
               </label>
               <input
                 type="number"
@@ -265,7 +267,7 @@ export default function ManualEntryView({
               <span
                 style={{ fontSize: "13px", color: "rgba(255,255,255,0.4)" }}
               >
-                grams
+                {t("capture.grams")}
               </span>
             </div>
             {/* Scaled macros */}
@@ -278,22 +280,22 @@ export default function ManualEntryView({
             >
               {[
                 {
-                  label: "Cal",
+                  label: t("macro.cal"),
                   value: scaledFoodMacros.calories,
                   color: "#E8C872",
                 },
                 {
-                  label: "Protein",
+                  label: t("macro.protein"),
                   value: `${scaledFoodMacros.protein_g}g`,
                   color: "#7BE0AD",
                 },
                 {
-                  label: "Carbs",
+                  label: t("macro.carbs"),
                   value: `${scaledFoodMacros.carbs_g}g`,
                   color: "#72B4E8",
                 },
                 {
-                  label: "Fat",
+                  label: t("macro.fat"),
                   value: `${scaledFoodMacros.fat_g}g`,
                   color: "#E87272",
                 },
@@ -329,7 +331,7 @@ export default function ManualEntryView({
                 fontFamily: "'DM Sans',sans-serif",
               }}
             >
-              + Add Item
+              {t("manual.addItem")}
             </button>
           </div>
         )}
@@ -346,7 +348,7 @@ export default function ManualEntryView({
                 fontWeight: 500,
               }}
             >
-              Your items ({manualItems.length})
+              {t("manual.yourItems")} ({manualItems.length})
             </span>
             {manualItems.map((item, i) => (
               <ItemRow
@@ -369,7 +371,7 @@ export default function ManualEntryView({
             ))}
             {/* Running totals — MacroRings */}
             {(() => {
-              const t = manualItems.reduce(
+              const tot = manualItems.reduce(
                 (acc, it) => ({
                   calories: acc.calories + it.calories,
                   protein_g: +(acc.protein_g + it.protein_g).toFixed(1),
@@ -389,32 +391,32 @@ export default function ManualEntryView({
                   }}
                 >
                   <MacroRing
-                    value={t.calories}
+                    value={tot.calories}
                     max={goals.calories}
                     color="#E8C872"
-                    label="Calories"
-                    unit="kcal"
+                    label={t("macro.calories")}
+                    unit={t("macro.kcal")}
                   />
                   <MacroRing
-                    value={t.protein_g}
+                    value={tot.protein_g}
                     max={goals.proteinG}
                     color="#7BE0AD"
-                    label="Protein"
-                    unit="g"
+                    label={t("macro.protein")}
+                    unit={t("macro.g")}
                   />
                   <MacroRing
-                    value={t.carbs_g}
+                    value={tot.carbs_g}
                     max={goals.carbsG}
                     color="#72B4E8"
-                    label="Carbs"
-                    unit="g"
+                    label={t("macro.carbs")}
+                    unit={t("macro.g")}
                   />
                   <MacroRing
-                    value={t.fat_g}
+                    value={tot.fat_g}
                     max={goals.fatG}
                     color="#E87272"
-                    label="Fat"
-                    unit="g"
+                    label={t("macro.fat")}
+                    unit={t("macro.g")}
                   />
                 </div>
               );

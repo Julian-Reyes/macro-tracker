@@ -1,7 +1,9 @@
+import { useLocale } from "../locales/index.jsx";
+
 const TAB_CONFIG = [
   {
     id: "capture",
-    label: "Scan",
+    labelKey: "tabs.scan",
     icon: (color) => (
       <svg
         width="24"
@@ -20,7 +22,7 @@ const TAB_CONFIG = [
   },
   {
     id: "daily",
-    label: "Log",
+    labelKey: "tabs.log",
     icon: (color) => (
       <svg
         width="24"
@@ -41,7 +43,7 @@ const TAB_CONFIG = [
   },
   {
     id: "weekly",
-    label: "Stats",
+    labelKey: "tabs.stats",
     icon: (color) => (
       <svg
         width="24"
@@ -61,7 +63,7 @@ const TAB_CONFIG = [
   },
   {
     id: "settings",
-    label: "Goals",
+    labelKey: "tabs.goals",
     icon: (color) => (
       <svg
         width="24"
@@ -82,6 +84,7 @@ const TAB_CONFIG = [
 ];
 
 export default function BottomTabBar({ view, dailyLogCount, onTabChange }) {
+  const { t } = useLocale();
   return (
     <div
       style={{
@@ -106,10 +109,11 @@ export default function BottomTabBar({ view, dailyLogCount, onTabChange }) {
           tab.id === view ||
           (tab.id === "capture" && (view === "result" || view === "manual"));
         const color = isActive ? "#E8C872" : "rgba(255,255,255,0.45)";
+        const tabLabel = t(tab.labelKey);
         const label =
           tab.id === "daily" && dailyLogCount > 0
-            ? `Log (${dailyLogCount})`
-            : tab.label;
+            ? `${tabLabel} (${dailyLogCount})`
+            : tabLabel;
         return (
           <button
             key={tab.id}

@@ -1,5 +1,6 @@
 import WeeklyBarChart from "../components/WeeklyBarChart";
 import { formatWeekRange, getWeekStartMonday } from "../utils/dates";
+import { useLocale } from "../locales/index.jsx";
 
 export default function WeeklyStatsView({
   weeklyData,
@@ -15,6 +16,7 @@ export default function WeeklyStatsView({
   onDayClick,
   onScan,
 }) {
+  const { t } = useLocale();
   return (
     <div style={{ animation: "fadeSlideIn 0.3s ease-out" }}>
       {/* Week Navigation */}
@@ -55,7 +57,7 @@ export default function WeeklyStatsView({
             color: isCurrentWeek ? "#E8C872" : "rgba(255,255,255,0.7)",
           }}
         >
-          {isCurrentWeek ? "This Week" : formatWeekRange(weekStart)}
+          {isCurrentWeek ? t("weekly.thisWeek") : formatWeekRange(weekStart)}
         </span>
         <button
           onClick={() => onWeekChange(1)}
@@ -96,7 +98,7 @@ export default function WeeklyStatsView({
               fontFamily: "'DM Sans',sans-serif",
             }}
           >
-            This Week
+            {t("weekly.thisWeek")}
           </button>
         )}
       </div>
@@ -116,7 +118,7 @@ export default function WeeklyStatsView({
             }}
           />
           <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "13px" }}>
-            Loading stats...
+            {t("weekly.loadingStats")}
           </p>
         </div>
       ) : weeklyData.length > 0 ? (
@@ -178,9 +180,9 @@ export default function WeeklyStatsView({
                     marginBottom: "12px",
                   }}
                 >
-                  Daily Averages{" "}
+                  {t("weekly.dailyAverages")}{" "}
                   <span style={{ color: "rgba(255,255,255,0.15)" }}>
-                    ({n} day{n > 1 ? "s" : ""})
+                    ({n} {n > 1 ? t("weekly.days") : t("weekly.day")})
                   </span>
                 </div>
                 <div
@@ -192,25 +194,25 @@ export default function WeeklyStatsView({
                 >
                   {[
                     {
-                      label: "Calories",
+                      label: t("macro.calories"),
                       value: Math.round(totals.calories / n),
                       color: "#E8C872",
                       metric: "calories",
                     },
                     {
-                      label: "Protein",
+                      label: t("macro.protein"),
                       value: `${Math.round(totals.protein_g / n)}g`,
                       color: "#7BE0AD",
                       metric: "protein_g",
                     },
                     {
-                      label: "Carbs",
+                      label: t("macro.carbs"),
                       value: `${Math.round(totals.carbs_g / n)}g`,
                       color: "#72B4E8",
                       metric: "carbs_g",
                     },
                     {
-                      label: "Fat",
+                      label: t("macro.fat"),
                       value: `${Math.round(totals.fat_g / n)}g`,
                       color: "#E87272",
                       metric: "fat_g",
@@ -262,22 +264,22 @@ export default function WeeklyStatsView({
                 >
                   {[
                     {
-                      label: "Total Cal",
+                      label: t("weekly.totalCal"),
                       value: totals.calories.toLocaleString(),
                       color: "#E8C872",
                     },
                     {
-                      label: "Total Protein",
+                      label: t("weekly.totalProtein"),
                       value: `${totals.protein_g}g`,
                       color: "#7BE0AD",
                     },
                     {
-                      label: "Days Logged",
+                      label: t("weekly.daysLogged"),
                       value: daysLogged.length,
                       color: "rgba(255,255,255,0.6)",
                     },
                     {
-                      label: "At Goal",
+                      label: t("weekly.atGoal"),
                       value: atGoal,
                       color:
                         atGoal > 0 ? "#7BE0AD" : "rgba(255,255,255,0.3)",
@@ -308,7 +310,7 @@ export default function WeeklyStatsView({
       ) : (
         <div style={{ padding: "60px 20px", textAlign: "center" }}>
           <p style={{ color: "rgba(255,255,255,0.2)", fontSize: "14px" }}>
-            No meals logged this week
+            {t("weekly.noMeals")}
           </p>
           <button
             onClick={onScan}
@@ -324,7 +326,7 @@ export default function WeeklyStatsView({
               fontFamily: "'DM Sans',sans-serif",
             }}
           >
-            Scan your first meal
+            {t("weekly.scanFirst")}
           </button>
         </div>
       )}
