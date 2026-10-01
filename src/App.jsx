@@ -749,17 +749,27 @@ export default function App() {
   const handleBarcodeDetected = useCallback(async (code) => {
     setBarcodeScanning(false);
     setBarcodeLoading(true);
+    setError(null);
+    let timeoutId;
     try {
-      const product = await lookupBarcode(code);
+      const timeout = new Promise((_, reject) => {
+        timeoutId = setTimeout(
+          () => reject(new Error("Product lookup took too long. Please try again.")),
+          10000,
+        );
+      });
+      const product = await Promise.race([lookupBarcode(code), timeout]);
+      if (!product) throw new Error("No product was found for this barcode.");
       setSelectedFood(product);
       setManualGrams(product.servingSize || 100);
       setManualQuery("");
       setManualResults([]);
       setView("manual");
     } catch (err) {
-      setError(err.message || "Product not found");
+      setError(err.message || "Could not look up this barcode. Please try again.");
       setView("capture");
     } finally {
+      clearTimeout(timeoutId);
       setBarcodeLoading(false);
     }
   }, []);
@@ -1009,28 +1019,41 @@ export default function App() {
 
       {/* Barcode loading */}
       {barcodeLoading && (
-        <div style={{ padding: "32px 20px", textAlign: "center" }}>
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            minHeight: "55vh",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "18px",
+            padding: "32px 20px",
+            textAlign: "center",
+          }}
+        >
           <div
             style={{
-              height: "3px",
-              borderRadius: "2px",
-              margin: "0 auto 16px",
-              width: "200px",
-              background:
-                "linear-gradient(90deg, transparent, #E8C872, transparent)",
-              backgroundSize: "200% 100%",
-              animation: "shimmer 1.5s infinite",
+              width: "42px",
+              height: "42px",
+              border: "4px solid rgba(232,200,114,0.2)",
+              borderTopColor: "#E8C872",
+              borderRadius: "50%",
+              animation: "barcodeSpin 0.8s linear infinite",
             }}
           />
           <p
             style={{
-              color: "rgba(255,255,255,0.4)",
-              fontSize: "13px",
-              animation: "pulse 2s infinite",
+              color: "rgba(255,255,255,0.82)",
+              fontSize: "15px",
+              fontWeight: 500,
+              margin: 0,
             }}
           >
             {t("app.lookingUp")}
           </p>
+          <style>{`@keyframes barcodeSpin { to { transform: rotate(360deg); } }`}</style>
         </div>
       )}
 

@@ -14,8 +14,11 @@ export default function BarcodeScannerView({ onBarcodeDetected, onClose }) {
   // Try live camera first, fall back to photo mode
   useEffect(() => {
     let scanner;
+    let cancelled = false;
+
     import("html5-qrcode")
       .then(({ Html5Qrcode }) => {
+        if (cancelled) return;
         scanner = new Html5Qrcode("barcode-reader");
         html5QrCodeRef.current = scanner;
 
@@ -29,7 +32,7 @@ export default function BarcodeScannerView({ onBarcodeDetected, onClose }) {
             },
           },
           (decodedText) => {
-            if (detectedRef.current) return;
+            if (cancelled || detectedRef.current) return;
             detectedRef.current = true;
             scanner.stop().catch(() => {});
             onBarcodeDetected(decodedText);
@@ -37,11 +40,12 @@ export default function BarcodeScannerView({ onBarcodeDetected, onClose }) {
           () => {},
         );
       })
-      .then(() => setMode("live"))
-      .catch(() => setMode("photo"));
+      .then(() => { if (!cancelled) setMode("live"); })
+      .catch(() => { if (!cancelled) setMode("photo"); });
 
     return () => {
-      if (scanner) scanner.stop().catch(() => {});
+      cancelled = true;
+      if (scanner) try { scanner.stop().catch(() => {}); } catch {}
     };
   }, [onBarcodeDetected]);
 
